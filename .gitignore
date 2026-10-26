@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# System & OS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Temporary & Cache files
+*.tmp
+*.wav
+*.ass
+*.log
