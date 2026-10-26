@@ -138,6 +138,7 @@ def generate(output_dir):
         "---\n",
         "## 🏆 全场巅峰汇总\n",
         f"- 📁 **总输出目录**：{format_link(output_dir, output_dir)}",
+        f"- 📦 **Skill 算法版本**：`v1.3.0` [badminton-video-cutter-v1.3.0.zip](file://{os.path.join(output_dir, 'badminton-video-cutter-v1.3.0.zip')})",
         f"- 🏸 **实战总场次**：{len(match_folders)} 场完整双打对抗",
         f"- ⚡ **全量纯净多拍总数**：**{total_rallies} 个** (零死球·无无打球镜头·无字幕遮挡·4K UHD)",
         f"- 🔥 **15秒以上超长高能拉锯**：**{total_long_rallies} 个**",
