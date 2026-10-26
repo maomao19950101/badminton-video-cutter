@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.3.3
+version: 1.3.4
 description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.3)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.4)
 
-> **Current Release**: `v1.3.3` (2026-10-26) · **Dual-Contrast Transient Calibration & Multi-Point High Clear Flight Preservation Edition**  
+> **Current Release**: `v1.3.4` (2026-10-26) · **Mid-Rally Dead-Ball Drop Decoupling & Idle-Court Spike Filtering Edition**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -17,6 +17,7 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 > 1. **Strict Zero Dead-Ball Truncation (绝对零死球截断规范与球落地即止原则)**:
 >    - Bounded strictly by `[Serve setup / strike]` ($t_{\text{serve}} - 0.70\text{s}$) to `[Decisive point termination]` ($t_{\text{last}} + 0.45\text{s}$).
 >    - **Zero walking, zero ball-retrieval, zero resting**: A highlight clip must never contain players strolling, retrieving birds, wiping sweat, or scratching heads. The moment the shuttlecock touches the floor or net, the clip must terminate immediately.
+>    - **Mid-Rally Dead-Ball Motion Drop Decoupling (中途死球动量骤降解耦)**: For any inter-strike interval $\ge 0.65\text{s}$, the cutter evaluates instantaneous court motion at $t_{\text{hit}} + 0.45\text{s}$. If near-court players freeze ($\text{near\_m} < 2.6$ and $\text{our\_m} < 6.5$) or total court motion collapses ($\text{our\_m} < 4.8$), the rally decouples immediately at the winning hit, preventing adjacent-court smashes during post-point breaks from gluing walking into a bloated clip.
 >    - **Racket Double-Tap Ball-Scoop Pruning (球拍捞球双击自动剔除)**: In badminton, players tap the floor twice in rapid succession ($0.35\text{s} \sim 0.50\text{s}$ apart) to bounce the bird off the ground into their hands after a dead-ball walking gap ($\ge 1.35\text{s}$). The cutter automatically detects and strips these trailing pickup taps from the rally.
 > 2. **Never Cut Off Prematurely Before Point Finishes (绝对严禁未死球提前截断·网前轻球与高远球物理保全)**:
 >    - **Never cut while players are still actively exchanging shots!** A rally must be preserved in its full entirety from the opening serve until the final winning kill or error lands on the court/net, regardless of whether the rally lasts 10s or 35s+.

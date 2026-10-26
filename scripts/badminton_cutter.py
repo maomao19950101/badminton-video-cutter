@@ -29,7 +29,7 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-__version__ = "1.3.3"
+__version__ = "1.3.4"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -284,10 +284,22 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
     if not peaks:
         return []
 
-    # 1. Cluster with max_gap = 2.85s (preserves all high clears up to 2.80s)
+    # 1. Multi-modal hit verification: filter out adjacent court acoustic spikes during dead court
+    verified_peaks = []
+    for p in peaks:
+        if cap is not None and fps > 0:
+            m = sample_instant_motion(cap, fps, p[0])
+            if m is not None and (m[0] < 6.0 and m[2] < 2.6):
+                continue
+        verified_peaks.append(p)
+
+    if not verified_peaks:
+        return []
+
+    # 2. Cluster with max_gap = 2.85s (preserves all high clears up to 2.80s)
     clusters = []
-    curr = [peaks[0]]
-    for p in peaks[1:]:
+    curr = [verified_peaks[0]]
+    for p in verified_peaks[1:]:
         if p[0] - curr[-1][0] <= max_gap:
             curr.append(p)
         else:
@@ -296,7 +308,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
     if curr:
         clusters.append(curr)
 
-    # 2. Decouple separate rallies joined by walking/pickup sounds
+    # 3. Decouple separate rallies joined by walking/pickup sounds or mid-rally dead-ball drops
     decoupled = []
     for c in clusters:
         sub = []
@@ -305,7 +317,26 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
             sub.append(c[i])
             if i + 1 < len(c):
                 gap = c[i + 1][0] - c[i][0]
-                # High Clear & Dead-Ball Decoupling (Multi-Point Flight Verification):
+
+                # Check 1: Mid-Rally Dead-Ball Motion Drop (落地即止与近半场动量骤降核验)
+                # When near-court players freeze (near_m < 2.6 and our_m < 6.5) or overall motion is dead (our_m < 4.8):
+                # The bird has landed on the floor/net! Decouple immediately at the final stroke c[i].
+                is_dead_ball = False
+                if cap is not None and fps > 0 and gap >= 0.65:
+                    t_check = c[i][0] + 0.45
+                    m_dead = sample_instant_motion(cap, fps, t_check)
+                    if m_dead is not None:
+                        our_m, far_m, near_m, top_d, b_max = m_dead
+                        if (near_m < 2.6 and our_m < 6.5) or (our_m < 4.8):
+                            is_dead_ball = True
+
+                if is_dead_ball:
+                    decoupled.append(sub)
+                    sub = []
+                    i += 1
+                    continue
+
+                # Check 2: High Clear & Dead-Ball Decoupling (Multi-Point Flight Verification)
                 # Gaps < 1.75s are normal rally stroke exchanges (including drops and smash returns).
                 # Gaps >= 1.75s are either high clears in flight or point terminations/intermissions.
                 if gap >= 1.75:
@@ -328,7 +359,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                             # Boundary walk-off: extreme edge activity (max_b >= 20.0) or edge exit with low court play (max_b >= 12.0 and max_our < 8.0)
                             is_walk_off = (max_b >= 20.0) or (max_b >= 12.0 and max_our < 8.0)
                             if min_top <= 4.0 and not is_walk_off:
-                                if has_continuation and (max_our >= 8.0 or max_court >= 10.0):
+                                if has_continuation and (max_our >= 9.0 or (max_court >= 13.0 and max_our >= 8.0)):
                                     is_live_clear = True
                                 elif not has_continuation and max_our >= 9.5 and max_b <= 7.2:
                                     is_live_clear = True

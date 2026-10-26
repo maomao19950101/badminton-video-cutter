@@ -6,7 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.3] - 2026-10-26 (Current Release)
+## [1.3.4] - 2026-10-26 (Current Release)
+
+### 🚀 Major Breakthroughs: Mid-Rally Dead-Ball Drop Decoupling & Multi-Modal Idle-Court Spike Filtering (中途死球动量骤降解耦·球落地即刻截断与邻场串扰清洗)
+- **Mid-Rally Dead-Ball Motion Drop (中途死球近半场动量骤降解耦)**: For any inter-strike interval $\ge 0.65\text{s}$, the cutter evaluates instantaneous court motion at $t_{\text{hit}} + 0.45\text{s}$. If near-court players freeze ($\text{near\_m} < 2.6$ and $\text{our\_m} < 6.5$) or total court motion collapses ($\text{our\_m} < 4.8$), the rally decouples immediately at the winning hit. Solves the issue where adjacent-court smashes during post-point dead balls glued dead intervals into bloated clips (e.g. `047` Match 2 `多拍10` 04分00秒至04分17秒, which landed at 04分07秒, is now cleanly trimmed to 7 seconds).
+- **Multimodal Idle-Court Spike Rejection (静止场区声学串扰清洗)**: Filters out spurious acoustic spikes where the active court is completely idle ($\text{our\_m} < 6.0$ and $\text{near\_m} < 2.6$), preventing adjacent court smashes from injecting fake hits into the middle of dead-ball breaks.
+- **Calibrated High-Clear Flight Motion Threshold**: Refined the live flight criteria ($\text{max\_our} \ge 9.0$ or $\text{max\_court} \ge 13.0$ with $\text{max\_our} \ge 8.0$), distinguishing walking back to serve from explosive high-clear chasing.
+
+---
+
+## [1.3.3] - 2026-10-26
 
 ### 🚀 Major Breakthroughs: Dual-Contrast Transient Sensitivity & Multi-Point High Clear Flight Preservation (双重声学标定·多点航迹核验与超长拉锯完整保全)
 - **Dual-Contrast Acoustic Transient Calibration (双重对比度声学标定)**: Retains standard stroke sensitivity ($E \ge 5.0 \times 10^6, \text{ratio} \ge 3.0$) while introducing high-contrast soft touch detection ($E \ge 4.2 \times 10^6, \text{ratio} \ge 20.0$). Unlocks ultra-subtle net drops (网前轻放/吊球) and baseline high clear defenses down to $4.2 \times 10^6$ without admitting gym ambient footstep or adjacent court bleed noises.
