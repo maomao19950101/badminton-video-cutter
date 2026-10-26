@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.3.0
+version: 1.3.1
 description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.0)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.1)
 
-> **Current Release**: `v1.3.0` (2026-10-26) · **Ground-Truth Slicer & Zero Dead-Ball Edition**  
+> **Current Release**: `v1.3.1` (2026-10-26) · **Player Exit & Sideline Switch Decoupling Edition**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -26,9 +26,10 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 >    - **Zero non-badminton play**: Any interval where players are not actually serving or exchanging shots (camera mounting, adjusting clamp, walking around court, warming up without rallying, camera teardown/shutdown) MUST be 100% excluded.
 >    - Uses **Automatic Camera Match Window Benchmarking** (`fast_camera_match_window`) to detect when camera stabilizes on mount (`stable_start`) and when it is unmounted/handled at shutdown (`unstable_end`).
 >    - Uses **Stationary Frame Diff Verification** (`check_clip_is_real_play`): rejects handheld/shaking camera ($\text{top\_diff} > 4.5$) and idle/static court ($\text{center\_diff} < 1.8$).
-> 4. **Personnel Entry/Exit & Intermission Filtering (人员进出场与非实战走动严格过滤)**:
->    - Bystanders crossing sidelines, substitutes entering/exiting, players walking off court to drink water or change players must NEVER be treated as multi-shot rallies.
->    - Use spatial 3-zone boundary corridor masking ($X < 0.15 W, X > 0.85 W, Y > 0.85 H$) and locomotion gait classification (athletic footwork vs upright casual walking) to reject or truncate non-match intervals immediately.
+> 4. **Personnel Entry/Exit & Intermission Filtering (人员进出场与换人离场严格过滤与实时解耦)**:
+>    - Bystanders crossing sidelines, substitutes entering/exiting, players walking off court to drink water or change players must NEVER be treated as multi-shot rallies or tacked onto the tail of genuine points.
+>    - **Visual Mid-Gap Decoupling (`extract_multi_shot_rallies`)**: Whenever an inter-strike gap $\ge 1.50\text{s}$ occurs during acoustic clustering, sample instantaneous perspective court motion (`sample_instant_motion`) at the gap midpoint. If active court motion decays ($\text{our\_m} < 9.5$), sideline boundary activity surges ($\text{b\_max} > 7.2$), or camera shakes ($\text{top\_d} > 4.0$), decouple the rally immediately at the previous stroke! This stops adjacent-court smashes from gluing walking off court / changing players / intermissions to the end of a real rally.
+>    - **4-Point Temporal Exit/Switch Verification (`check_clip_is_real_play`)**: Evaluates candidate clips across 4 temporal anchor points ($20\%, 40\%, 60\%, 80\%$). Automatically drops clips where players leave the court, change players, or where the active court is left empty ($\text{min\_our} < 6.0$, $\text{high\_b\_count} \ge 2$ with $\text{b\_max} \ge 12.0$, or $\text{b\_max} \ge 11.0$ with $\text{our\_m} < 8.0$), while preserving high-intensity live play with fleeting sideline pedestrians.
 > 5. **Default Pure Clean Video without Text Overlays (默认纯净原画无字幕·无遮挡直出)**:
 >    - **Never burn text, titles, badges, or HUD onto the video screen by default!** Players need unobstructed view of the court, bird trajectory, and opponent movements.
 >    - Always default to 100% clean, pristine 4K UHD video via lossless stream copy (`-c copy`). HUD overlay is strictly an optional mode (`--hud`) when explicitly requested.
