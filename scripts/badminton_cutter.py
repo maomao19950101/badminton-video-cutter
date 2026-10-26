@@ -29,7 +29,7 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -66,12 +66,14 @@ def get_video_duration(vpath, ffmpeg_bin=DEFAULT_FFMPEG):
     return 0.0
 
 
-def detect_hits(wav_path, th_val=5.0e6, ratio_th=3.0):
+def detect_hits(wav_path, th_val=5.0e6, ratio_th=3.0, soft_th=4.2e6, soft_ratio=20.0):
     """
-    Tier 1 Acoustic Transient Detection:
+    Tier 1 Acoustic Transient Detection (Dual-Contrast Calibration):
     Extracts candidate shuttlecock impact moments from high-frequency energy diffs.
-    Calibrated for multi-court gymnasiums to suppress adjacent court bleed while
-    preserving genuine rallies on the primary court.
+    Calibrated for multi-court gymnasiums to suppress adjacent court bleed and sneaker squeaks
+    while faithfully preserving both standard strokes and high-contrast soft touches:
+      1. Standard gym strike: E >= th_val (default 5.0e6), ratio >= ratio_th (default 3.0)
+      2. High-contrast soft touch / net drop: E >= soft_th (default 4.2e6), ratio >= soft_ratio (default 20.0)
     """
     with wave.open(wav_path, "rb") as w:
         sr = w.getframerate()
@@ -90,10 +92,11 @@ def detect_hits(wav_path, th_val=5.0e6, ratio_th=3.0):
     last_t = -1.0
     for idx in range(20, len(hf_energy) - 20):
         val = hf_energy[idx]
-        if val > th_val and val > hf_energy[idx - 1] and val >= hf_energy[idx + 1]:
+        if val > hf_energy[idx - 1] and val >= hf_energy[idx + 1]:
             bg = np.mean(hf_energy[max(0, idx - 40):max(1, idx - 10)])
             ratio = val / (bg + 1e-5)
-            if ratio > ratio_th and times[idx] - last_t > 0.35:
+            is_hit = (val >= th_val and ratio >= ratio_th) or (val >= soft_th and ratio >= soft_ratio)
+            if is_hit and times[idx] - last_t > 0.35:
                 peaks.append((times[idx], val))
                 last_t = times[idx]
     return peaks
@@ -302,23 +305,37 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
             sub.append(c[i])
             if i + 1 < len(c):
                 gap = c[i + 1][0] - c[i][0]
-                # High Clear & Dead-Ball Decoupling:
+                # High Clear & Dead-Ball Decoupling (Multi-Point Flight Verification):
                 # Gaps < 1.75s are normal rally stroke exchanges (including drops and smash returns).
                 # Gaps >= 1.75s are either high clears in flight or point terminations/intermissions.
                 if gap >= 1.75:
                     is_live_clear = False
+                    has_continuation = False
+                    if i + 2 < len(c):
+                        g_next = c[i + 2][0] - c[i + 1][0]
+                        if 0.40 <= g_next <= 2.20 and (len(c) - (i + 1)) >= 2:
+                            has_continuation = True
+
                     if cap is not None and fps > 0:
-                        mid = 0.5 * (c[i][0] + c[i + 1][0])
-                        m = sample_instant_motion(cap, fps, mid)
-                        if m is not None:
-                            our_m, far_m, near_m, top_d, b_max = m
-                            if our_m >= 9.0 and b_max <= 7.2 and top_d <= 4.0:
-                                is_live_clear = True
+                        pts = [c[i][0] + 0.30 * gap, c[i][0] + 0.70 * gap]
+                        motions = [sample_instant_motion(cap, fps, pt) for pt in pts]
+                        motions = [m for m in motions if m is not None]
+                        if motions:
+                            max_our = max(m[0] for m in motions)
+                            max_court = max(max(m[1], m[2]) for m in motions)
+                            min_top = min(m[3] for m in motions)
+                            max_b = max(m[4] for m in motions)
+                            # Boundary walk-off: extreme edge activity (max_b >= 20.0) or edge exit with low court play (max_b >= 12.0 and max_our < 8.0)
+                            is_walk_off = (max_b >= 20.0) or (max_b >= 12.0 and max_our < 8.0)
+                            if min_top <= 4.0 and not is_walk_off:
+                                if has_continuation and (max_our >= 8.0 or max_court >= 10.0):
+                                    is_live_clear = True
+                                elif not has_continuation and max_our >= 9.5 and max_b <= 7.2:
+                                    is_live_clear = True
                     else:
-                        if i + 2 < len(c):
-                            g2 = c[i + 2][0] - c[i + 1][0]
-                            if 0.50 <= g2 <= 2.85:
-                                is_live_clear = True
+                        if has_continuation:
+                            is_live_clear = True
+
                     if not is_live_clear:
                         decoupled.append(sub)
                         sub = []

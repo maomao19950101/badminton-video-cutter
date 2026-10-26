@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.3.2
+version: 1.3.3
 description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.2)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.3)
 
-> **Current Release**: `v1.3.2` (2026-10-26) · **Soft-Shot Dynamic Capture & True Decisive Point Preservation Edition**  
+> **Current Release**: `v1.3.3` (2026-10-26) · **Dual-Contrast Transient Calibration & Multi-Point High Clear Flight Preservation Edition**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -20,9 +20,8 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 >    - **Racket Double-Tap Ball-Scoop Pruning (球拍捞球双击自动剔除)**: In badminton, players tap the floor twice in rapid succession ($0.35\text{s} \sim 0.50\text{s}$ apart) to bounce the bird off the ground into their hands after a dead-ball walking gap ($\ge 1.35\text{s}$). The cutter automatically detects and strips these trailing pickup taps from the rally.
 > 2. **Never Cut Off Prematurely Before Point Finishes (绝对严禁未死球提前截断·网前轻球与高远球物理保全)**:
 >    - **Never cut while players are still actively exchanging shots!** A rally must be preserved in its full entirety from the opening serve until the final winning kill or error lands on the court/net, regardless of whether the rally lasts 10s or 35s+.
->    - **Soft-Shot Dynamic Capture (网前轻吊·搓放·推球声学灵敏度保全)**: Delicate net tumbles, slices, drops, and net pushes produce acoustic transients around $4.5 \times 10^6 \sim 7.5 \times 10^6$ ($15\sim 30\times$ above background noise). Hit detection threshold is calibrated to $5.0 \times 10^6$ (ratio 3.0) to ensure soft net exchanges are 100% captured without missing intermediary strokes.
->    - **Elimination of Flawed Energy Decoupling (严禁高能量击球盲目截断)**: Rallies are NEVER arbitrarily truncated after a high-energy stroke ($E \ge 1.8 \times 10^7$) simply because the return takes $>1.35$s. Full-power baseline clears and defensive lifts off smashes float for $2.0\text{s} \sim 2.85\text{s}$ in the air and must be preserved 100%!
->    - **2.85s Physical Flight Ceiling (2.85秒高远球空气动力保全)**: Baseline-to-baseline high clears (高远球/挑后场) take up to $2.80\text{s}$ in flight. The acoustic clustering window maintains `max_gap = 2.85s` so no defensive high clear is ever chopped in half mid-flight.
+>    - **Soft-Shot Dynamic Capture (网前轻吊·搓放·推球双重声学标定)**: Delicate net tumbles, slices, drops, and net pushes produce acoustic transients around $4.2 \times 10^6 \sim 7.5 \times 10^6$ ($15\sim 30\times$ above background noise). Hit detection uses **Dual-Contrast Acoustic Calibration**: standard strokes at $E \ge 5.0 \times 10^6$ (ratio $\ge 3.0$), plus high-contrast soft touches at $E \ge 4.2 \times 10^6$ (ratio $\ge 20.0$), ensuring subtle net exchanges and baseline high clear defenses are 100% captured without admitting ambient footstep noise.
+>    - **Multi-Point Flight Motion Verification & Aerodynamic Ceiling (多点航迹运动学校验·2.85秒高远球空气动力保全)**: Baseline-to-baseline high clears (高远球/挑后场) take up to $2.80\text{s}$ in flight. Across any inter-strike interval $\ge 1.75\text{s}$, the cutter evaluates 2 temporal anchor points ($30\%$ and $70\%$). If the stroke is followed by active rally cadence ($\Delta t_{\text{next}} \le 2.20\text{s}$ with remaining hits $\ge 2$) with active player movement ($\text{max\_our} \ge 8.0$ or $\text{max\_court} \ge 10.0$) and stable camera, the flight is preserved 100% without severance.
 > 3. **Non-Badminton & Camera Setup Exclusion (绝对严禁无打球镜头与开机调试进入集锦)**:
 >    - **Zero non-badminton play**: Any interval where players are not actually serving or exchanging shots (camera mounting, adjusting clamp, walking around court, warming up without rallying, camera teardown/shutdown) MUST be 100% excluded.
 >    - Uses **Automatic Camera Match Window Benchmarking** (`fast_camera_match_window`) to detect when camera stabilizes on mount (`stable_start`) and when it is unmounted/handled at shutdown (`unstable_end`).

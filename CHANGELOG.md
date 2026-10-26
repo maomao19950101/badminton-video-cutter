@@ -6,7 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.2] - 2026-10-26 (Current Release)
+## [1.3.3] - 2026-10-26 (Current Release)
+
+### 🚀 Major Breakthroughs: Dual-Contrast Transient Sensitivity & Multi-Point High Clear Flight Preservation (双重声学标定·多点航迹核验与超长拉锯完整保全)
+- **Dual-Contrast Acoustic Transient Calibration (双重对比度声学标定)**: Retains standard stroke sensitivity ($E \ge 5.0 \times 10^6, \text{ratio} \ge 3.0$) while introducing high-contrast soft touch detection ($E \ge 4.2 \times 10^6, \text{ratio} \ge 20.0$). Unlocks ultra-subtle net drops (网前轻放/吊球) and baseline high clear defenses down to $4.2 \times 10^6$ without admitting gym ambient footstep or adjacent court bleed noises.
+- **Multi-Point Flight Motion Verification (多点航迹运动学校验)**: Replaced fragile single-point midpoint instantaneous sampling with 2-point aerodynamic flight verification ($30\%$ and $70\%$ across gaps $\ge 1.75\text{s}$). Rejects the momentary 0.2s split-step pause under high clears that previously caused false dead-ball cuts.
+- **Active Rally Continuation Protection (持续对攻物理保全)**: Couples flight optical motion with stroke continuation checking ($0.40\text{s} \le \Delta t_{\text{next}} \le 2.20\text{s}$ with remaining hits $\ge 2$). In-rally high clears surrounded by continuous exchanges are preserved 100% without severance.
+- **Sideline Pedestrian Immunity vs Severe Walk-off Decoupling (场边走动免疫与离场精准解耦)**: Distinguishes passing bystanders on gym aisles ($\text{b\_max} < 20.0$ while active court $\text{our\_m} \ge 8.0$) from genuine player substitutions or court exits ($\text{b\_max} \ge 20.0$ or $\text{b\_max} \ge 12.0$ with court motion $\text{our\_m} < 8.0$).
+- **Direct Resolution for User Cases**:
+  - `048` Match 3 `多拍10`: Merged the previously severed 11s clip (06分34秒至06分45秒) into the complete, unbroken **34-second mega rally** (06分34秒至07分08秒, 40 real strokes).
+  - `046` Match 1 `多拍80`: Decisively terminates at 26分21秒, strictly cutting out player substitutions and court walk-offs.
+  - `046` Match 1 `多拍25`: Perfectly preserved at 19.2s (12分58秒至13分17秒) with zero premature truncation.
+
+---
+
+## [1.3.2] - 2026-10-26
 
 ### 🚀 Major Breakthroughs: Soft-Shot Dynamic Capture & True Decisive Point Preservation (网前轻球灵敏捕获与未死球零提前截断)
 - **Soft-Shot Dynamic Sensitivity ($5.0 \times 10^6$ Thresh, Ratio 3.0)**: Calibrated acoustic transient detection threshold from $8.5 \times 10^6$ down to $5.0 \times 10^6$. Captures soft drop shots (吊球), delicate net tumbles (网前搓放), slices, and net pushes that generate subtle high-frequency transients, completely eliminating artificial 3+ second inter-strike gaps during live net play (e.g. resolving `多拍25` 12分58秒 cutting mid-air).
