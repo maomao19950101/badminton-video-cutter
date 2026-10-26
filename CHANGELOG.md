@@ -6,7 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.1] - 2026-10-26 (Current Release)
+## [1.3.2] - 2026-10-26 (Current Release)
+
+### 🚀 Major Breakthroughs: Soft-Shot Dynamic Capture & True Decisive Point Preservation (网前轻球灵敏捕获与未死球零提前截断)
+- **Soft-Shot Dynamic Sensitivity ($5.0 \times 10^6$ Thresh, Ratio 3.0)**: Calibrated acoustic transient detection threshold from $8.5 \times 10^6$ down to $5.0 \times 10^6$. Captures soft drop shots (吊球), delicate net tumbles (网前搓放), slices, and net pushes that generate subtle high-frequency transients, completely eliminating artificial 3+ second inter-strike gaps during live net play (e.g. resolving `多拍25` 12分58秒 cutting mid-air).
+- **Elimination of Flawed Energy Decoupling**: Completely removed the premature cutoff rule on high-energy hits with gaps $>1.35$s. Full-power baseline clears and defensive lifts off smashes take $2.0\text{s} \sim 2.85\text{s}$ to cross the court; they are now 100% preserved in their full trajectory.
+- **Mid-Gap Visual Decoupling Tuning ($\ge 1.75\text{s}$)**: Adjusted mid-gap optical verification threshold to $\ge 1.75\text{s}$ with `our_m >= 9.0`, cleanly distinguishing live aerodynamic high clears from dead-ball walks/substitutions.
+- **In-Memory Sub-Second Motion Cache**: Added `_MOTION_CACHE` to `sample_instant_motion`, eliminating redundant 4K video seeks and accelerating processing.
+
+---
+
+## [1.3.1] - 2026-10-26
 
 ### 🚀 Major Breakthroughs: Player Exit, Substitution & Sideline Switch Filtering (人员离场换人解耦与全场纯净度提升)
 - **Visual Mid-Gap Decoupling (`extract_multi_shot_rallies`)**: For any inter-strike interval $\ge 1.50\text{s}$, the cutter performs an instant optical motion check at the gap midpoint. If court motion decays ($\text{our\_m} < 9.5$), sideline boundary activity surges ($\text{b\_max} > 7.2$), or camera shakes ($\text{top\_d} > 4.0$), the rally decouples immediately at the winning strike. Decisively terminates rallies when players walk off or switch (resolving issues like `多拍80` trailing into player swaps).

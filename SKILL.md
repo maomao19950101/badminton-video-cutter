@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.3.1
+version: 1.3.2
 description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.1)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.2)
 
-> **Current Release**: `v1.3.1` (2026-10-26) · **Player Exit & Sideline Switch Decoupling Edition**  
+> **Current Release**: `v1.3.2` (2026-10-26) · **Soft-Shot Dynamic Capture & True Decisive Point Preservation Edition**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -18,17 +18,18 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 >    - Bounded strictly by `[Serve setup / strike]` ($t_{\text{serve}} - 0.70\text{s}$) to `[Decisive point termination]` ($t_{\text{last}} + 0.45\text{s}$).
 >    - **Zero walking, zero ball-retrieval, zero resting**: A highlight clip must never contain players strolling, retrieving birds, wiping sweat, or scratching heads. The moment the shuttlecock touches the floor or net, the clip must terminate immediately.
 >    - **Racket Double-Tap Ball-Scoop Pruning (球拍捞球双击自动剔除)**: In badminton, players tap the floor twice in rapid succession ($0.35\text{s} \sim 0.50\text{s}$ apart) to bounce the bird off the ground into their hands after a dead-ball walking gap ($\ge 1.35\text{s}$). The cutter automatically detects and strips these trailing pickup taps from the rally.
-> 2. **Never Cut Off Prematurely Before Point Finishes (绝对严禁未死球提前截断与高远球物理保全)**:
+> 2. **Never Cut Off Prematurely Before Point Finishes (绝对严禁未死球提前截断·网前轻球与高远球物理保全)**:
 >    - **Never cut while players are still actively exchanging shots!** A rally must be preserved in its full entirety from the opening serve until the final winning kill or error lands on the court/net, regardless of whether the rally lasts 10s or 35s+.
->    - **2.85s Physical Flight Ceiling (2.85秒高远球空气动力保全)**: Baseline-to-baseline high clears (高远球/挑后场) take up to $2.80\text{s}$ in flight. The acoustic clustering window must maintain `max_gap = 2.85s` so no defensive high clear is ever chopped in half mid-flight.
->    - **Decisive Stroke Decoupling (终结性击球解耦)**: When a stroke is a smash or net kill ($E \ge 1.8 \times 10^7$) and has no return within $1.35\text{s}$, the point has been won; the point decouples immediately at $t_{\text{smash}} + 0.45\text{s}$, preventing adjacent court sounds from gluing the 15-second intermission into the rally.
+>    - **Soft-Shot Dynamic Capture (网前轻吊·搓放·推球声学灵敏度保全)**: Delicate net tumbles, slices, drops, and net pushes produce acoustic transients around $4.5 \times 10^6 \sim 7.5 \times 10^6$ ($15\sim 30\times$ above background noise). Hit detection threshold is calibrated to $5.0 \times 10^6$ (ratio 3.0) to ensure soft net exchanges are 100% captured without missing intermediary strokes.
+>    - **Elimination of Flawed Energy Decoupling (严禁高能量击球盲目截断)**: Rallies are NEVER arbitrarily truncated after a high-energy stroke ($E \ge 1.8 \times 10^7$) simply because the return takes $>1.35$s. Full-power baseline clears and defensive lifts off smashes float for $2.0\text{s} \sim 2.85\text{s}$ in the air and must be preserved 100%!
+>    - **2.85s Physical Flight Ceiling (2.85秒高远球空气动力保全)**: Baseline-to-baseline high clears (高远球/挑后场) take up to $2.80\text{s}$ in flight. The acoustic clustering window maintains `max_gap = 2.85s` so no defensive high clear is ever chopped in half mid-flight.
 > 3. **Non-Badminton & Camera Setup Exclusion (绝对严禁无打球镜头与开机调试进入集锦)**:
 >    - **Zero non-badminton play**: Any interval where players are not actually serving or exchanging shots (camera mounting, adjusting clamp, walking around court, warming up without rallying, camera teardown/shutdown) MUST be 100% excluded.
 >    - Uses **Automatic Camera Match Window Benchmarking** (`fast_camera_match_window`) to detect when camera stabilizes on mount (`stable_start`) and when it is unmounted/handled at shutdown (`unstable_end`).
 >    - Uses **Stationary Frame Diff Verification** (`check_clip_is_real_play`): rejects handheld/shaking camera ($\text{top\_diff} > 4.5$) and idle/static court ($\text{center\_diff} < 1.8$).
 > 4. **Personnel Entry/Exit & Intermission Filtering (人员进出场与换人离场严格过滤与实时解耦)**:
 >    - Bystanders crossing sidelines, substitutes entering/exiting, players walking off court to drink water or change players must NEVER be treated as multi-shot rallies or tacked onto the tail of genuine points.
->    - **Visual Mid-Gap Decoupling (`extract_multi_shot_rallies`)**: Whenever an inter-strike gap $\ge 1.50\text{s}$ occurs during acoustic clustering, sample instantaneous perspective court motion (`sample_instant_motion`) at the gap midpoint. If active court motion decays ($\text{our\_m} < 9.5$), sideline boundary activity surges ($\text{b\_max} > 7.2$), or camera shakes ($\text{top\_d} > 4.0$), decouple the rally immediately at the previous stroke! This stops adjacent-court smashes from gluing walking off court / changing players / intermissions to the end of a real rally.
+>    - **Visual Mid-Gap Decoupling (`extract_multi_shot_rallies`)**: Whenever an inter-strike gap $\ge 1.75\text{s}$ occurs during acoustic clustering, sample instantaneous perspective court motion (`sample_instant_motion`) at the gap midpoint. If active court motion decays ($\text{our\_m} < 9.0$), sideline boundary activity surges ($\text{b\_max} > 7.2$), or camera shakes ($\text{top\_d} > 4.0$), decouple the rally immediately at the previous stroke! This stops adjacent-court smashes from gluing walking off court / changing players / intermissions to the end of a real rally while keeping live high clears intact.
 >    - **4-Point Temporal Exit/Switch Verification (`check_clip_is_real_play`)**: Evaluates candidate clips across 4 temporal anchor points ($20\%, 40\%, 60\%, 80\%$). Automatically drops clips where players leave the court, change players, or where the active court is left empty ($\text{min\_our} < 6.0$, $\text{high\_b\_count} \ge 2$ with $\text{b\_max} \ge 12.0$, or $\text{b\_max} \ge 11.0$ with $\text{our\_m} < 8.0$), while preserving high-intensity live play with fleeting sideline pedestrians.
 > 5. **Default Pure Clean Video without Text Overlays (默认纯净原画无字幕·无遮挡直出)**:
 >    - **Never burn text, titles, badges, or HUD onto the video screen by default!** Players need unobstructed view of the court, bird trajectory, and opponent movements.

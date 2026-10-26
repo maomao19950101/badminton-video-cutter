@@ -29,7 +29,7 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -66,7 +66,7 @@ def get_video_duration(vpath, ffmpeg_bin=DEFAULT_FFMPEG):
     return 0.0
 
 
-def detect_hits(wav_path, th_val=8.5e6, ratio_th=3.2):
+def detect_hits(wav_path, th_val=5.0e6, ratio_th=3.0):
     """
     Tier 1 Acoustic Transient Detection:
     Extracts candidate shuttlecock impact moments from high-frequency energy diffs.
@@ -123,13 +123,20 @@ def compute_perspective_court_motion(d):
     return our_m, far_m, near_m, top_d, b_max
 
 
+_MOTION_CACHE = {}
+
+
 def sample_instant_motion(cap, fps, t_sec):
     """
     Measures instantaneous 4-frame (~0.133s) optical motion diff at timestamp t_sec
     using downscaled 640x360 grayscale frames and the Perspective Trapezoid mask.
+    Features an in-memory sub-second resolution cache to eliminate duplicate 4K seeks.
     """
     if cap is None or fps <= 0:
         return None
+    cache_key = round(t_sec, 1)
+    if cache_key in _MOTION_CACHE:
+        return _MOTION_CACHE[cache_key]
     cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, int(t_sec * fps)))
     ret1, f1 = cap.read()
     for _ in range(3):
@@ -139,7 +146,9 @@ def sample_instant_motion(cap, fps, t_sec):
         return None
     g1 = cv2.cvtColor(cv2.resize(f1, (640, 360)), cv2.COLOR_BGR2GRAY)
     g2 = cv2.cvtColor(cv2.resize(f2, (640, 360)), cv2.COLOR_BGR2GRAY)
-    return compute_perspective_court_motion(cv2.absdiff(g1, g2))
+    res = compute_perspective_court_motion(cv2.absdiff(g1, g2))
+    _MOTION_CACHE[cache_key] = res
+    return res
 
 
 def fast_camera_match_window(cap, fps, dur):
@@ -293,23 +302,22 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
             sub.append(c[i])
             if i + 1 < len(c):
                 gap = c[i + 1][0] - c[i][0]
-                # Smash / explosive kill with no return within 1.35s: point is decided!
-                if c[i][1] >= 1.8e7 and gap > 1.35:
-                    decoupled.append(sub)
-                    sub = []
-                elif gap >= 1.50:
+                # High Clear & Dead-Ball Decoupling:
+                # Gaps < 1.75s are normal rally stroke exchanges (including drops and smash returns).
+                # Gaps >= 1.75s are either high clears in flight or point terminations/intermissions.
+                if gap >= 1.75:
                     is_live_clear = False
                     if cap is not None and fps > 0:
                         mid = 0.5 * (c[i][0] + c[i + 1][0])
                         m = sample_instant_motion(cap, fps, mid)
                         if m is not None:
                             our_m, far_m, near_m, top_d, b_max = m
-                            if our_m >= 9.5 and b_max <= 7.2 and top_d <= 4.0:
+                            if our_m >= 9.0 and b_max <= 7.2 and top_d <= 4.0:
                                 is_live_clear = True
                     else:
                         if i + 2 < len(c):
                             g2 = c[i + 2][0] - c[i + 1][0]
-                            if 0.55 <= g2 <= 2.85:
+                            if 0.50 <= g2 <= 2.85:
                                 is_live_clear = True
                     if not is_live_clear:
                         decoupled.append(sub)
@@ -688,6 +696,7 @@ def main():
         if (args.strict_visual or True) and HAS_CV2:
             cap = cv2.VideoCapture(vpath)
             fps = cap.get(cv2.CAP_PROP_FPS)
+            _MOTION_CACHE.clear()
 
         try:
             # 1. Automatic Camera Match Window Benchmarking (Excludes handheld mount/unmount noise)
