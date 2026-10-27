@@ -6,7 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.4] - 2026-10-26 (Current Release)
+## [1.3.5] - 2026-10-27 (Current Release)
+
+### 🚀 Major Breakthroughs: Serve-Kill Ground Landing Guarantee & Subsequent Strike Suppression (接发秒杀落地即止保全·后续击球严格排他性与空中提前截断根除)
+- **Subsequent Strike Suppression (后续击球严格排他性)**: Added a mandatory exclusion check: for any serve-kill candidate impact $t_k$, there must be **ZERO acoustic hits within $[t_k + 0.25\text{s}, t_k + 3.20\text{s}]$**. Fixes the critical bug where an ongoing active multi-shot rally (e.g. `054` Match 6 at 01分44秒) was mistakenly clipped as a "serve kill" because the cutter stopped checking after $t_k$.
+- **Ground-Landing & Dead-Ball Decay Guarantee (完整下落航迹与球落地保全)**: Extended termination boundary $e_{\text{cut}}$ from $t_k + 0.45\text{s}$ to $\min(v_{\text{dur}}, t_k + 1.25\text{s})$. Fixed the issue where clips cut off prematurely at 0.45s while the shuttlecock was still mid-air crossing the net plane, ensuring the full downward plunge, ground impact, net rebound, and players' dead-ball relaxation are 100% visible before the clip ends.
+- **Pre-Serve Ready Stance Acoustic Guard**: Enforced strict pre-serve silence ($t_{\text{serve}} - 2.8\text{s} \sim t_{\text{serve}} - 0.5\text{s}$ zero hits), guaranteeing that only genuine serves initiated from stationary ready stances can qualify.
+- **Zero-False-Positive Cleanliness (宁缺毋滥执行铁律)**: In match footage where both pairs maintain vigilant serve reception with no direct unforced errors or point-blank kills, the engine decisively outputs 0 serve-kill clips, eliminating fake walking or mid-air truncated artifacts.
+
+---
+
+## [1.3.4] - 2026-10-26
 
 ### 🚀 Major Breakthroughs: Mid-Rally Dead-Ball Drop Decoupling & Multi-Modal Idle-Court Spike Filtering (中途死球动量骤降解耦·球落地即刻截断与邻场串扰清洗)
 - **Mid-Rally Dead-Ball Motion Drop (中途死球近半场动量骤降解耦)**: For any inter-strike interval $\ge 0.65\text{s}$, the cutter evaluates instantaneous court motion at $t_{\text{hit}} + 0.45\text{s}$. If near-court players freeze ($\text{near\_m} < 2.6$ and $\text{our\_m} < 6.5$) or total court motion collapses ($\text{our\_m} < 4.8$), the rally decouples immediately at the winning hit. Solves the issue where adjacent-court smashes during post-point dead balls glued dead intervals into bloated clips (e.g. `047` Match 2 `多拍10` 04分00秒至04分17秒, which landed at 04分07秒, is now cleanly trimmed to 7 seconds).

@@ -131,6 +131,14 @@ def generate(output_dir):
                 kf_out.write(f"| {idx_k:02d} | {gk_file} | {dur_k} | {format_link(gk_full)} |\n")
 
     # Assemble Full README
+    # Find skill package if present
+    zip_pkgs = [f for f in sorted(os.listdir(output_dir)) if f.startswith("badminton-video-cutter") and f.endswith(".zip")]
+    latest_zip = zip_pkgs[-1] if zip_pkgs else "badminton-video-cutter-v1.3.5.zip"
+    skill_ver = "v1.3.5"
+    m_ver = re.search(r"v(\d+\.\d+\.\d+)", latest_zip)
+    if m_ver:
+        skill_ver = f"v{m_ver.group(1)}"
+
     readme_lines = [
         f"# 🏸 {date_tag} 羽毛球实战 · 精彩多拍集锦全量精剪总览 (八大铁律标准版)\n",
         "> **剪辑执行标准**：本目录全部视频严格执行【羽毛球精彩集锦八大执行铁律】与【极速并发无损架构】全自动精剪。",
@@ -138,7 +146,7 @@ def generate(output_dir):
         "---\n",
         "## 🏆 全场巅峰汇总\n",
         f"- 📁 **总输出目录**：{format_link(output_dir, output_dir)}",
-        f"- 📦 **Skill 算法版本**：`v1.3.4` [badminton-video-cutter-v1.3.4.zip](file://{os.path.join(output_dir, 'badminton-video-cutter-v1.3.4.zip')})",
+        f"- 📦 **Skill 算法版本**：`{skill_ver}` [{latest_zip}](file://{os.path.join(output_dir, latest_zip)})",
         f"- 🏸 **实战总场次**：{len(match_folders)} 场完整双打对抗",
         f"- ⚡ **全量纯净多拍总数**：**{total_rallies} 个** (零死球·无无打球镜头·无字幕遮挡·4K UHD)",
         f"- 🔥 **15秒以上超长高能拉锯**：**{total_long_rallies} 个**",

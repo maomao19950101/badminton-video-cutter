@@ -29,7 +29,7 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-__version__ = "1.3.4"
+__version__ = "1.3.5"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -411,83 +411,81 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
 
 def extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur):
     """
-    Multimodal Visual Serve-Kill Verification Protocol (Perspective Trapezoid + 8-Worker Parallel):
-    1. Identifies isolated high-energy candidate transients in inter-rally gaps.
-    2. Parallelizes 4-stage visual verification across 8 workers:
-       - Stage 1 (Kill Impact): 15.5 <= our_m <= 24.5, far_m >= 12.0, near_m >= 9.2, top_d <= 3.8, b_max <= 8.5
-       - Stage 2 (Pre-Serve Ready Stance): min(pre1, pre2) <= 7.2, near_m <= 9.5, b_max <= 7.0
-       - Stage 3 (Explosive Surge): surge = kill / min_pre >= 2.5
-       - Stage 4 (Immediate Dead Ball): post <= 13.8
+    Multimodal Visual Serve-Kill Verification Protocol (v1.3.5 Ground-Landing Guaranteed):
+    1. Mandatory Acoustic Isolation:
+       - Server hits bird (t_serve) within 0.45s ~ 1.70s before receiver's kill impact (t_k).
+       - Zero acoustic strikes within [t_k + 0.25, t_k + 3.20] (proves rally did NOT continue).
+       - Pre-serve ready stance silence: zero strikes between [t_serve - 2.80, t_serve - 0.50].
+       - Kill impact energy >= 7.5e6.
+    2. Parallelized 4-Stage Visual Verification across 8 workers:
+       - Stage 1 (Kill Impact): 14.0 <= our_m <= 26.0, far_m >= 10.0 or near_m >= 8.0, b_max <= 9.0
+       - Stage 2 (Pre-Serve Ready Stance): min(pre1, pre2) <= 7.8, near_m <= 9.5, b_max <= 7.0
+       - Stage 3 (Explosive Surge): surge = kill / (min_pre + 1e-4) >= 2.0
+       - Stage 4 (Dead-Ball Decay & Full Landing Trajectory): post (at t_k + 1.2s) <= 12.5
+    3. Complete Landing Guarantee:
+       - s_cut = max(0.0, t_serve - 0.65)
+       - e_cut = min(v_dur, t_k + 1.25)  (Allows shuttlecock to plunge down, hit floor/net, and bounce)
     """
     if cap is None or fps <= 0 or not peaks:
         return []
 
-    gaps = []
-    prev_end = max(stable_start, 10.0)
-    for r in rallies:
-        if r["s_cut"] - prev_end >= 2.2:
-            gaps.append((prev_end, r["s_cut"]))
-        prev_end = max(prev_end, r["e_cut"])
-    if min(unstable_end, v_dur - 10.0) - prev_end >= 2.2:
-        gaps.append((prev_end, min(unstable_end, v_dur - 10.0)))
+    # Filter candidate kill moments strictly based on serve-strike sequence and subsequent silence
+    cand_items = []
+    for i in range(len(peaks)):
+        t_k = peaks[i][0]
+        # Must have serve hit 0.45s to 1.70s before t_k
+        serves = [p[0] for p in peaks if 0.45 <= (t_k - p[0]) <= 1.70]
+        if not serves:
+            continue
+        t_serve = serves[-1]
 
-    cand_times = []
-    for g_s, g_e in gaps:
-        gp = [p for p in peaks if (g_s + 0.3) <= p[0] <= (g_e - 0.3) and p[1] >= 9.0e6]
-        for p in gp:
-            if not cand_times or p[0] - cand_times[-1] > 1.4:
-                cand_times.append(p[0])
+        # Must have NO acoustic hit for at least 3.2s after t_k (rally must not continue!)
+        subsequent = [p[0] for p in peaks if 0.25 <= (p[0] - t_k) <= 3.20]
+        if subsequent:
+            continue
 
-    # Also include short 2-3 hit high-energy clusters (<= 3.8s) separated by >= 2.3s
-    clusters = [[peaks[0]]]
-    for p in peaks[1:]:
-        if p[0] - clusters[-1][-1][0] <= 1.8:
-            clusters[-1].append(p)
-        else:
-            clusters.append([p])
-    for idx_c, c in enumerate(clusters):
-        dur_c = c[-1][0] - c[0][0]
-        if 1 <= len(c) <= 3 and dur_c <= 2.8 and max(p[1] for p in c) >= 9.5e6:
-            d_prev = (c[0][0] - clusters[idx_c - 1][-1][0]) if idx_c > 0 else 99.0
-            d_next = (clusters[idx_c + 1][0][0] - c[-1][0]) if idx_c + 1 < len(clusters) else 99.0
-            if d_prev >= 2.2 and d_next >= 2.2:
-                cand_times.append(c[-1][0])
+        # Must have NO acoustic hit between t_serve - 2.8s and t_serve - 0.5s (ready stance before serve)
+        pre_noise = [p[0] for p in peaks if 0.50 <= (t_serve - p[0]) <= 2.80]
+        if pre_noise:
+            continue
 
-    cand_times = sorted(set(round(t, 2) for t in cand_times))
-    dedup_cands = []
-    for t in cand_times:
-        if not dedup_cands or t - dedup_cands[-1] > 1.3:
-            dedup_cands.append(t)
+        if peaks[i][1] >= 7.5e6:
+            cand_items.append((t_serve, t_k))
 
-    def _verify_worker(sub_times):
-        if not sub_times:
+    if not cand_items:
+        return []
+
+    def _verify_worker(sub_items):
+        if not sub_items:
             return []
         w_cap = cv2.VideoCapture(vpath)
         w_fps = w_cap.get(cv2.CAP_PROP_FPS)
         found = []
-        for t_k in sub_times:
+        for t_serve, t_k in sub_items:
             km = sample_instant_motion(w_cap, w_fps, t_k - 0.08)
-            if not km or km[3] > 3.8 or km[4] > 8.5 or not (15.5 <= km[0] <= 24.5) or km[1] < 12.0 or km[2] < 9.2:
+            if not km or km[3] > 3.8 or km[4] > 9.0 or not (14.0 <= km[0] <= 26.0) or (km[1] < 10.0 and km[2] < 8.0):
                 continue
-            pre1 = sample_instant_motion(w_cap, w_fps, t_k - 1.8)
-            pre2 = sample_instant_motion(w_cap, w_fps, t_k - 1.2)
-            post = sample_instant_motion(w_cap, w_fps, t_k + 1.3)
+            pre1 = sample_instant_motion(w_cap, w_fps, t_serve - 1.2)
+            pre2 = sample_instant_motion(w_cap, w_fps, t_serve - 0.6)
+            post = sample_instant_motion(w_cap, w_fps, t_k + 1.2)
             if not (pre1 and pre2 and post):
                 continue
             if pre1[4] > 7.0 or pre2[4] > 6.5 or pre1[2] > 9.5 or pre2[2] > 9.5:
                 continue
             min_pre = min(pre1[0], pre2[0])
-            if min_pre > 7.2:
-                pre0 = sample_instant_motion(w_cap, w_fps, t_k - 2.3)
+            if min_pre > 7.5:
+                pre0 = sample_instant_motion(w_cap, w_fps, t_serve - 2.0)
                 if pre0 and pre0[4] <= 7.0 and pre0[2] <= 9.5:
                     min_pre = min(min_pre, pre0[0])
             surge = km[0] / (min_pre + 1e-4)
-            if min_pre <= 7.2 and post[0] <= 13.8 and surge >= 2.5:
-                s_cut = max(0.0, t_k - 1.85)
-                e_cut = min(v_dur, t_k + 0.45)
+            if min_pre <= 7.8 and post[0] <= 12.5 and surge >= 2.0:
+                s_cut = max(0.0, t_serve - 0.65)
+                # CRITICAL: e_cut MUST allow the shuttlecock to plunge down, hit floor/net, bounce,
+                # and show players reacting to the dead ball. Never cut at t_k + 0.45s!
+                e_cut = min(v_dur, t_k + 1.25)
                 found.append({
                     "kill_t": t_k,
-                    "serve_t": max(0.0, t_k - 1.4),
+                    "serve_t": t_serve,
                     "s_cut": s_cut,
                     "e_cut": e_cut,
                     "dur": e_cut - s_cut,
@@ -497,7 +495,7 @@ def extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unst
         w_cap.release()
         return found
 
-    chunks = [dedup_cands[i::8] for i in range(8)]
+    chunks = [cand_items[i::8] for i in range(8)]
     with ThreadPoolExecutor(max_workers=8) as ex:
         results = list(ex.map(_verify_worker, chunks))
 
@@ -720,6 +718,14 @@ def main():
 
     for idx, vpath in enumerate(videos, 1):
         vname = os.path.splitext(os.path.basename(vpath))[0]
+        sz = os.path.getsize(vpath) if os.path.exists(vpath) else 0
+        if sz == 0:
+            print(f"\n[{idx}/{len(videos)}] ⏳ Skipping empty/uploading video: {vname} (0 bytes, upload in progress)")
+            continue
+        v_dur = get_video_duration(vpath, args.ffmpeg)
+        if v_dur <= 1.0:
+            print(f"\n[{idx}/{len(videos)}] ⚠️ Skipping incomplete video: {vname} (moov atom not found / still uploading)")
+            continue
         if vname in match_mapping:
             folder_name = match_mapping[vname]
         else:

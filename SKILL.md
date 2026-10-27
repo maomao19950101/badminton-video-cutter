@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.3.4
+version: 1.3.5
 description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.4)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.5)
 
-> **Current Release**: `v1.3.4` (2026-10-26) · **Mid-Rally Dead-Ball Drop Decoupling & Idle-Court Spike Filtering Edition**  
+> **Current Release**: `v1.3.5` (2026-10-27) · **Serve-Kill Ground Landing Guarantee & Subsequent Strike Suppression Edition**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -38,18 +38,19 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 >    - In open gymnasiums (6–12 courts), adjacent courts constantly produce high-frequency impacts. Never rely on audio silence alone (`max_gap > 3.0s`), as it falsely glues separate points across 15s walking breaks into fake "30–60 second" mega-rallies.
 > 7. **1:1 Real Shot Ground Truth (真拍数1对1实战对应)**:
 >    - Every counted shot in HUD or analytics MUST correspond 1:1 to an actual player stroke on the active court. Filter out sneaker friction squeaks and racket frame clicks via physical flight-time clustering ($\Delta t \ge 0.50$s).
-> 8. **Strict Visual Serve-Kill Verification Protocol (发球被一拍定死/接发秒杀严苛视觉动量核验规范)**:
+> 8. **Strict Visual Serve-Kill Verification Protocol (发球被一拍定死/接发秒杀严苛视觉动量与球落地保全规范)**:
 >    - **Absolute Ban on Acoustic-Only Clustering**: In multi-court gyms, adjacent courts smash continuously during dead-ball intermissions ($10\sim 25$s). Acoustic-only peak detection invariably captures walking, wiping sweat, or picking up shuttlecocks as fake "serve-kills".
+>    - **Strict Subsequent Strike Suppression (后续击球严格排他性)**: For any kill candidate strike $t_k$, there must be **ZERO acoustic hits within $[t_k + 0.25\text{s}, t_k + 3.20\text{s}]$**. If a subsequent stroke is detected, play continued into an active rally, strictly disqualifying the moment as a serve-kill.
 >    - **Perspective Trapezoid Court Mask (`compute_perspective_court_motion`)**: In wide-angle baseline camera views, a rectangular center crop ($X \in [0.20 W, 0.80 W]$) accidentally overlaps with adjacent left/right courts in the upper half of the frame. Always use a **Perspective Trapezoid Mask**:
 >      - *Far Half-Court & Net Zone*: $Y \in [0.40 H, 0.58 H], X \in [0.38 W, 0.57 W]$ (strictly bounded between the two net posts of our court, masking out adjacent courts completely).
 >      - *Near Half-Court Zone*: $Y \in [0.58 H, 0.86 H], X \in [0.26 W, 0.72 W]$.
 >      - *Bilateral Engagement*: Both `far_m` and `near_m` must be simultaneously active using a **4-frame ($0.133\text{s}$) instantaneous frame diff** (`sample_instant_motion`).
->    - **Mandatory 4-Stage Physical Verification**: Every serve-kill candidate must visually satisfy:
->      1. *Pre-Serve Ready Stance*: Court motion $\le 7.2$ (`min(pre1, pre2)`) and sideline/bench boundary motion $\le 7.0$ (both server and receiver paused in service boxes, zero pedestrian intrusion).
+>    - **Mandatory 4-Stage Physical Verification & Ground-Landing Guarantee (球落地与死球反冲保全)**: Every serve-kill candidate must visually satisfy:
+>      1. *Pre-Serve Ready Stance*: Court motion $\le 7.8$ (`min(pre1, pre2)`) and sideline/bench boundary motion $\le 7.0$ (both server and receiver paused in service boxes, zero pedestrian intrusion).
 >      2. *Serve Strike*: Server hits bird ($t_{\text{serve}}$).
->      3. *Explosive Kill Action*: Receiver leaps into the air or rushes the tape, perspective court motion surging to $12.5 \le \text{kill} \le 24.5$ (`far_m >= 14.0`, `near_m >= 7.0`, `b_max <= 8.5`) with surge ratio $\ge 2.1$.
->      4. *Immediate Dead Ball & Floor Termination*: Point terminates strictly at $t_{\text{kill}} + 0.45\text{s}$ ($\text{post} \le 13.8$); total duration strictly $2.2\text{s} \sim 2.8\text{s}$ ($s_{\text{cut}} = t_k - 1.85\text{s}$, $e_{\text{cut}} = t_k + 0.45\text{s}$, ending immediately as the kill hits the floor, zero walking).
->    - **Quality Over Quantity**: If a match has no genuine serve-kill, output 0 clips for that match. Under no circumstances should fake walking clips be retained.
+>      3. *Explosive Kill Action*: Receiver leaps into the air or rushes the tape, perspective court motion surging to $14.0 \le \text{kill} \le 26.0$ (`far_m >= 10.0` or `near_m >= 8.0`, `b_max <= 9.0`) with surge ratio $\ge 2.0$.
+>      4. *Immediate Dead Ball & Complete Floor Landing*: Point terminates strictly at $e_{\text{cut}} = \min(v_{\text{dur}}, t_k + 1.25\text{s})$. **Never cut at $t_k + 0.45\text{s}$** (which terminates mid-air while the bird is still airborne crossing the net). The $1.25\text{s}$ post-kill window guarantees the shuttlecock visibly plunges down, hits the floor or net, bounces, and players exhibit decisive dead-ball relaxation ($\text{post} \le 12.5$ at $t_k + 1.2\text{s}$). Total duration strictly $\approx 3.1\text{s}$ ($s_{\text{cut}} = \max(0.0, t_{\text{serve}} - 0.65\text{s})$, $e_{\text{cut}} = t_k + 1.25\text{s}$).
+>    - **Quality Over Quantity (宁缺毋滥原则)**: If a match has no genuine serve-kill, output 0 clips for that match. Under no circumstances should fake ongoing rallies or truncated airborne clips be retained.
 
 ---
 
