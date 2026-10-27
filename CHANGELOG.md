@@ -6,7 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.6] - 2026-10-27 (Current Release)
+## [1.3.7] - 2026-10-27 (Current Release)
+
+### 🚀 Major Optimization: Optional Highlight Reel Generation & Ultra-Fast Low-Disk Footprint Pipeline (超长多拍TOP大集锦可选化·极速轻量化输出与磁盘冗余清零版)
+- **Optional Highlight Reel Generation (`--reel` 参数可选化)**: Converted automatic concatenation of multi-shot highlight reels (`00_【纯多拍零死球合集】...` and `00_【全场巅峰超长多拍TOP大集锦】...`) into an optional, user-configurable flag (default `False`). Eliminates the massive disk I/O bottleneck and gigabytes of duplicate video files (e.g., saves 5.7 GB per 30-min 4K match and 2.75 GB for grand cross-match compilation), enabling near-instant extraction of high-energy clips.
+- **On-Demand Big Reel Compilation (按需生成大合集)**: Users can now freely choose whether to generate concatenated reels by adding `--reel` when needed, keeping default runs fast, lean, and clean.
+- **Enhanced Terminal Feedback (友好终端进度提示)**: Added explicit terminal logs informing the user that clips are saved cleanly and that concatenated reels were safely bypassed to save time and disk space (with prompt on how to enable via `--reel`).
+
+---
+
+## [1.3.6] - 2026-10-27
 
 ### 🚀 Major Breakthroughs: Bilateral Play Cadence Verification & Mid-Rally Dead-Ball Ground-Landing Severing (双侧对攻连续性核验·落地即止强截断与捡球走动死球彻底根除版)
 - **Consecutive Same-Court Stroke Rule & Bilateral Cadence (同半场连续击球终结判定与双侧攻防核验)**: In badminton, strokes must alternate across the net. Fixed the critical vulnerability where adjacent-court smashes and players' ball-scoop taps during walking breaks were misclassified as active hits on our court. When an inter-strike gap $\ge 0.70\text{s}$ occurs with dormant far court (`far_m < 5.2`) or non-play walking motion (`our_m < 8.8`, `near_m < 10.5`), the point is confirmed terminated at the previous real strike.

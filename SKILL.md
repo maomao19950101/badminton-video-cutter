@@ -300,6 +300,7 @@ A fully featured CLI is bundled in `scripts/badminton_cutter.py`:
 
 ### Parameter Reference:
 - Default (no `--hud`): Produces **100% clean, pure 4K UHD video with zero dead ball and zero text/subtitle overlays** via lossless stream copy (`-c copy`).
+- `--reel`: (Optional, default disabled) Generates concatenated multi-shot top highlight reels and cross-match compilations (`00_【纯多拍零死球合集】...` and `00_【全场巅峰超长多拍TOP大集锦】...`). Disabled by default to eliminate multi-gigabyte disk writes and accelerate turnaround to seconds.
 - `--strict-visual`: (Default enabled) Enforces visual optical motion drop detection to cut off dead-ball walking pauses immediately.
 - `--hud`: (Optional) Renders Olympic/BWF broadcast HUD overlays on top rallies when subtitles/on-screen badges are explicitly requested.
 - `--slowmo`: Generates 0.4x slow-motion instant replays for decisive attacks.
@@ -334,7 +335,11 @@ To eliminate the 20~30 minute processing bottleneck on large 4K HEVC match recor
 
 | 版本号 (Version) | 发布日期 (Date) | 核心算法演进 (Milestones) | 交付物规格 (Deliverables) |
 | :--- | :--- | :--- | :--- |
-| **`v1.3.0`** (最新) | 2026-10-26 | **真拍物理对攻解耦（Ground-Truth Slicer）**：<br>1. 2.85s 高远球物理保全上限，杜绝未死球提前掐断；<br>2. 捞球双击自动剔除算法（去除死球后球拍点地杂音）；<br>3. 终结击球瞬时解耦（$t_{\text{last}} + 0.45\text{s}$ 落地即切，零死球走动）；<br>4. 秒杀系列收紧至 $2.2\text{s} \sim 2.7\text{s}$。 | 纯净 4K UHD 无损直出 (`-c copy`) + 微信表情包 GIF + Git 标签 `v1.3.0` |
+| **`v1.3.7`** (最新) | 2026-10-27 | **超长多拍TOP大集锦可选化（Optional Reel Generation）**：<br>1. `--reel` 参数支持按需开启拼接（默认关闭，单场与跨场大合集彻底轻量化）；<br>2. 杜绝几十 GB 冗余文件重复写入，实战视频秒级切片直出；<br>3. 强化终端友好进度反馈。 | 独立高能切片秒级直出 + 可选大合集 + Git 标签 `v1.3.7` |
+| **`v1.3.6`** | 2026-10-27 | **双侧攻防核验与落地即止强截断**：<br>1. 同半场连续击球终结判定（跨网对攻连续性核验）；<br>2. 落地即止强切断机制（$t_{\text{last}} + 0.55\text{s}$ 彻底根除假拉锯粘连）；<br>3. 邻场外围走廊声学串扰压制。 | 零死球原画切片 + 微信表情包 GIF + Git 标签 `v1.3.6` |
+| **`v1.3.5`** | 2026-10-27 | **接发秒杀落地即止保全与后续击球排他机制**：<br>1. $t_k + 3.2\text{s}$ 内无击球严格排他性；<br>2. 截断延展至 $t_k + 1.25\text{s}$ 保全羽毛球落地与触网弹跳全轨迹。 | 真实接发秒杀切片 + 微信表情包 GIF + Git 标签 `v1.3.5` |
+| **`v1.3.4`** | 2026-10-26 | **中途死球动量骤降解耦与静止场区声学串扰清洗**：<br>1. 击球后近半场冻结/球场动量骤降瞬时截断；<br>2. 静止场区声学串扰清洗。 | 纯净 4K UHD 无损直出 (`-c copy`) + Git 标签 `v1.3.4` |
+| **`v1.3.0`** | 2026-10-26 | **真拍物理对攻解耦（Ground-Truth Slicer）**：<br>1. 2.85s 高远球物理保全上限，杜绝未死球提前掐断；<br>2. 捞球双击自动剔除算法（去除死球后球拍点地杂音）；<br>3. 终结击球瞬时解耦（$t_{\text{last}} + 0.45\text{s}$ 落地即切，零死球走动）；<br>4. 秒杀系列收紧至 $2.2\text{s} \sim 2.7\text{s}$。 | 纯净 4K UHD 无损直出 (`-c copy`) + 微信表情包 GIF + Git 标签 `v1.3.0` |
 | **`v1.2.0`** | 2026-10-23 | **发球被一拍定死/接发秒杀智能核验**：<br>1. 4 阶段视觉动量防伪核验 ($surge \ge 2.5$)；<br>2. 微信 GIF 表情包自动压缩 (< 2.5 MB)；<br>3. 慢动作回放与秒杀大赏合集。 | 秒杀名场面全合集 + 动图表情包 + Git 标签 `v1.2.0` |
 | **`v1.1.0`** | 2026-10-21 | **透视梯形球场掩膜与并发流复制**：<br>1. 透视梯形主动球场掩膜（屏蔽相邻场地与观众走动）；<br>2. 机位实战时间窗对齐；<br>3. 8 线程并行流切 (`ThreadPoolExecutor`)；<br>4. BWF 奥运转播级毫秒跑表 HUD。 | HUD 焦点片段 + 多拍合集 + Git 标签 `v1.1.0` |
 | **`v1.0.0`** | 2026-10-19 | **声学高频瞬态检测初版**：<br>1. 16 kHz Mono WAV 向量化滑动差分累加；<br>2. 基础间隔聚类与无损切割管线。 | 初版纯净多拍提取 |

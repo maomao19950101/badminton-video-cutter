@@ -1,7 +1,7 @@
 # 🏸 Badminton Video Cutter (羽毛球实战视频智能精彩剪辑器)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.3.6-blue.svg?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.3.7-blue.svg?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/python-3.10+-brightgreen.svg?style=flat-square" alt="Python">
   <img src="https://img.shields.io/badge/ffmpeg-4K_UHD_StreamCopy-orange.svg?style=flat-square" alt="FFmpeg">
   <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License">
@@ -15,7 +15,9 @@
 
 - 🏸 **纯多拍对攻拉锯集锦 (Multi-Shot Rallies)**
   - 自动识别激烈回合对攻，智能区分 5~15 秒【多拍激烈对攻】与 15 秒以上【超长高能拉锯】。
-  - 单独输出独立精彩小视频，并一键无损缝合为整场比赛精选合集（`00_【纯多拍零死球合集】_全N段精选版.mp4`）。
+  - 单独输出独立精彩小视频，告别几十 GB 冗余占用，随时分享。
+- 🎞️ **可选生成巅峰大合集 (Optional Reel Generation - v1.3.7)**
+  - 默认极速直出独立高能切片，**无多余磁盘 I/O 损耗**；如需长视频，仅需添加 `--reel` 即可一键拼接单场及跨场全巅峰合集（`00_【纯多拍零死球合集】_全N段精选版.mp4` / `00_【全场巅峰超长多拍TOP大集锦】...`）。
 - ⚡ **接发突击一拍定死大赏 (Serve-and-Kill Moments)**
   - 毫秒级捕捉发球被直接扑死（【发球被一拍定死】）与接发直接变线抽杀（【接发突击一拍定死】）。
   - **v1.3.5 落地保全与后续击球排他机制**：严格验证 $t_k + 3.2\text{s}$ 内无后续击球（排他性），并延展 $e_{\text{cut}} = t_k + 1.25\text{s}$ 完整记录羽毛球下坠砸地、触网反弹与死球全轨迹。
@@ -104,20 +106,20 @@ uv run --with opencv-python-headless --with numpy --with scipy python scripts/ba
 ### 2. 命令行基础用法 (Basic Usage)
 
 ```bash
-# 1. 剪辑指定比赛目录下的所有视频（提取多拍 + 秒杀 + 合集）
-python scripts/badminton_cutter.py --dir /path/to/videos --mode all
+# 1. 极速提取所有精彩切片（默认模式，跳过生成几十 GB 的大合集视频，极速省空间）
+python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode all
 
-# 2. 仅提取多拍拉锯集锦并生成全场纯多拍合集
-python scripts/badminton_cutter.py --dir /path/to/videos --mode duopai
+# 2. 提取高光切片并一键缝合整场及跨场巅峰超长大合集（添加 --reel）
+python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode all --reel
 
-# 3. 仅提取接发秒杀一拍定死高光时刻
-python scripts/badminton_cutter.py --dir /path/to/videos --mode serve_kill
+# 3. 仅提取纯多拍拉锯对攻片段
+python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode duopai
 
-# 4. 生成带转播级 HUD 焦点战术特效的小视频
-python scripts/badminton_cutter.py --dir /path/to/videos --mode all --hud
+# 4. 仅提取接发秒杀一拍定死高光时刻与微信表情包
+python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode serve_kill --gif
 
-# 5. 生成接发秒杀微信动态表情包 (GIF)
-python scripts/badminton_cutter.py --dir /path/to/videos --mode serve_kill --gif
+# 5. 生成带转播级 HUD 毫秒跑表与击球数特效的精选片段
+python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode all --hud
 ```
 
 ---

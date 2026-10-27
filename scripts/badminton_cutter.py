@@ -29,7 +29,7 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-__version__ = "1.3.5"
+__version__ = "1.3.7"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -728,6 +728,7 @@ def main():
     parser.add_argument("--input", "-i", required=True, help="Input video file or directory of match videos")
     parser.add_argument("--output", "-o", required=True, help="Output root directory")
     parser.add_argument("--mode", choices=["duopai", "serve_kill", "all"], default="all", help="Extraction mode")
+    parser.add_argument("--reel", action="store_true", default=False, help="Generate concatenated multi-shot & serve-kill highlight reels (默认关闭，仅在明确指定 --reel 时才生成整场大合集/跨场大合集，节省剪辑耗时与磁盘空间)")
     parser.add_argument("--gif", action="store_true", help="Generate lightweight WeChat stickers/GIFs")
     parser.add_argument("--slowmo", action="store_true", help="Generate broadcast-grade 0.4x slow motion replays")
     parser.add_argument("--hud", action="store_true", help="Generate on-screen verified shot counter HUD for top rallies")
@@ -860,9 +861,12 @@ def main():
                                 all_grand_rallies.append(r[1])
 
                 if clip_paths:
-                    reel_name = f"00_【{display_name}_纯多拍零死球合集】_全{len(clip_paths)}段精选版.mp4"
-                    concat_clips(args.ffmpeg, clip_paths, os.path.join(match_dir, reel_name))
-                    print(f"  🎞️ Created multi-shot reel: {reel_name}")
+                    if args.reel:
+                        reel_name = f"00_【{display_name}_纯多拍零死球合集】_全{len(clip_paths)}段精选版.mp4"
+                        concat_clips(args.ffmpeg, clip_paths, os.path.join(match_dir, reel_name))
+                        print(f"  🎞️ Created multi-shot reel: {reel_name}")
+                    else:
+                        print(f"  💡 跳过单场多拍大合集拼接（已保存 {len(clip_paths)} 段独立高质量切片，极速节省空间。如需大合集请添加 --reel 参数）")
 
                 if args.hud:
                     hud_dir = os.path.join(match_dir, "转播级HUD特效")
@@ -925,9 +929,12 @@ def main():
                         generate_slowmo_replay(args.ffmpeg, kill_clips[0], slowmo_path)
 
                 if kill_clips:
-                    kill_reel_name = f"00_【{display_name}_发球被一拍定死合集】_全{len(kills)}个名场面.mp4"
-                    concat_clips(args.ffmpeg, kill_clips, os.path.join(kill_dir, kill_reel_name))
-                    print(f"  🎞️ Created serve-kill reel: {kill_reel_name}")
+                    if args.reel:
+                        kill_reel_name = f"00_【{display_name}_发球被一拍定死合集】_全{len(kills)}个名场面.mp4"
+                        concat_clips(args.ffmpeg, kill_clips, os.path.join(kill_dir, kill_reel_name))
+                        print(f"  🎞️ Created serve-kill reel: {kill_reel_name}")
+                    else:
+                        print(f"  💡 跳过单场发球被秒杀合集拼接（已保存 {len(kill_clips)} 段独立秒杀名场面，极速输出。如需合集请添加 --reel）")
 
         finally:
             if cap is not None:
@@ -937,22 +944,28 @@ def main():
         print(f"✨ Match [{display_name}] processing completed in {elapsed:.2f}s!")
 
     # Grand Cross-Match Reel Generation
-    if all_grand_rallies:
-        grand_reel_name = "00_【全场巅峰超长多拍TOP大集锦】_纯净原画零死球无字幕版.mp4"
-        grand_reel_path = os.path.join(args.output, grand_reel_name)
-        print(f"\n🌟 Compiling Grand Cross-Match Top Rallies ({len(all_grand_rallies)} rallies >= 15s)...")
-        concat_clips(args.ffmpeg, all_grand_rallies, grand_reel_path)
-        print(f"🎬 Grand Top Rallies compilation created: {grand_reel_path}")
+    if args.reel:
+        if all_grand_rallies:
+            grand_reel_name = "00_【全场巅峰超长多拍TOP大集锦】_纯净原画零死球无字幕版.mp4"
+            grand_reel_path = os.path.join(args.output, grand_reel_name)
+            print(f"\n🌟 Compiling Grand Cross-Match Top Rallies ({len(all_grand_rallies)} rallies >= 15s)...")
+            concat_clips(args.ffmpeg, all_grand_rallies, grand_reel_path)
+            print(f"🎬 Grand Top Rallies compilation created: {grand_reel_path}")
+
+        if all_grand_kills:
+            grand_kill_dir = os.path.join(args.output, "00_特别精选_发球被一拍定死大赏")
+            os.makedirs(grand_kill_dir, exist_ok=True)
+            grand_kill_reel_name = "00_【发球被一拍定死_接发秒杀连贯大赏】_全场纯净原画版.mp4"
+            grand_kill_path = os.path.join(grand_kill_dir, grand_kill_reel_name)
+            print(f"\n⚡ Compiling Grand Cross-Match Serve-Kills ({len(all_grand_kills)} moments)...")
+            concat_clips(args.ffmpeg, all_grand_kills, grand_kill_path)
+            print(f"🎬 Grand Serve-Kill compilation created: {grand_kill_path}")
+    else:
+        print(f"\n💡 跳过跨场大集锦拼接（默认极速模式，零冗余磁盘占用。如需生成跨场TOP总集请添加 --reel 参数）")
 
     if all_grand_kills:
         grand_kill_dir = os.path.join(args.output, "00_特别精选_发球被一拍定死大赏")
         os.makedirs(grand_kill_dir, exist_ok=True)
-        grand_kill_reel_name = "00_【发球被一拍定死_接发秒杀连贯大赏】_全场纯净原画版.mp4"
-        grand_kill_path = os.path.join(grand_kill_dir, grand_kill_reel_name)
-        print(f"\n⚡ Compiling Grand Cross-Match Serve-Kills ({len(all_grand_kills)} moments)...")
-        concat_clips(args.ffmpeg, all_grand_kills, grand_kill_path)
-        print(f"🎬 Grand Serve-Kill compilation created: {grand_kill_path}")
-
         # Populate grand_kill_dir with clips and WeChat GIFs
         gif_dest_dir = os.path.join(grand_kill_dir, "微信表情包GIF")
         os.makedirs(gif_dest_dir, exist_ok=True)
