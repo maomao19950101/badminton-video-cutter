@@ -6,7 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.5] - 2026-10-27 (Current Release)
+## [1.3.6] - 2026-10-27 (Current Release)
+
+### 🚀 Major Breakthroughs: Bilateral Play Cadence Verification & Mid-Rally Dead-Ball Ground-Landing Severing (双侧对攻连续性核验·落地即止强截断与捡球走动死球彻底根除版)
+- **Consecutive Same-Court Stroke Rule & Bilateral Cadence (同半场连续击球终结判定与双侧攻防核验)**: In badminton, strokes must alternate across the net. Fixed the critical vulnerability where adjacent-court smashes and players' ball-scoop taps during walking breaks were misclassified as active hits on our court. When an inter-strike gap $\ge 0.70\text{s}$ occurs with dormant far court (`far_m < 5.2`) or non-play walking motion (`our_m < 8.8`, `near_m < 10.5`), the point is confirmed terminated at the previous real strike.
+- **Ground-Truth Visual Dead-Ball Slicer (落地即止强切断机制)**: Implemented production `detect_visual_deadball_cutoff` protocol. Scans backward and mid-gap to find the exact millisecond the shuttlecock touches the floor or net, severing $e_{\text{cut}}$ strictly at $t_{\text{last\_strike}} + 0.55\text{s}$. Eliminates bloated Frankenstein clips where a 4-second initial exchange, a 6-second ball retrieval walk, a 2-second second point, and an 8-second standing wait were erroneously glued into a fake 21-second "超长高能拉锯" (e.g. `050` Match 2 `多拍61` from 26分38秒至26分59秒, where the ball landed at 26分42.3秒, is now severed cleanly at 26分42.8秒 with zero dead-ball trailing content).
+- **Outer-Boundary Adjacent-Court Bleed Decoupling (邻场声学串扰边界抑制)**: Automatically compares court optical flow with outer border corridors (`b_max >= 12.0` and `b_max >= 1.5 * our_m`). If motion is concentrated on adjacent courts (e.g. Court 6 smashes), the acoustic spike is decisively discarded.
+- **Multi-Tap Ball-Scoop Pruning (捡球连续轻拨消除)**: Eliminates players tapping rackets against the floor to pick up birds (`gap_prev >= 1.05s` and `gap_tail <= 0.75s`), terminating clips immediately upon initial ground landing.
+
+---
+
+## [1.3.5] - 2026-10-27
 
 ### 🚀 Major Breakthroughs: Serve-Kill Ground Landing Guarantee & Subsequent Strike Suppression (接发秒杀落地即止保全·后续击球严格排他性与空中提前截断根除)
 - **Subsequent Strike Suppression (后续击球严格排他性)**: Added a mandatory exclusion check: for any serve-kill candidate impact $t_k$, there must be **ZERO acoustic hits within $[t_k + 0.25\text{s}, t_k + 3.20\text{s}]$**. Fixes the critical bug where an ongoing active multi-shot rally (e.g. `054` Match 6 at 01分44秒) was mistakenly clipped as a "serve kill" because the cutter stopped checking after $t_k$.

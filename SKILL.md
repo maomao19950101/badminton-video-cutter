@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.3.5
+version: 1.3.6
 description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.5)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.6)
 
-> **Current Release**: `v1.3.5` (2026-10-27) · **Serve-Kill Ground Landing Guarantee & Subsequent Strike Suppression Edition**  
+> **Current Release**: `v1.3.6` (2026-10-27) · **Bilateral Play Cadence Verification & Mid-Rally Dead-Ball Ground-Landing Severing Edition**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -15,10 +15,11 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 > [!IMPORTANT]
 > **THE 8 MANDATORY RULES OF BADMINTON HIGHLIGHT EXTRACTION (羽毛球精彩集锦八大执行铁律):**
 > 1. **Strict Zero Dead-Ball Truncation (绝对零死球截断规范与球落地即止原则)**:
->    - Bounded strictly by `[Serve setup / strike]` ($t_{\text{serve}} - 0.70\text{s}$) to `[Decisive point termination]` ($t_{\text{last}} + 0.45\text{s}$).
+>    - Bounded strictly by `[Serve setup / strike]` ($t_{\text{serve}} - 0.70\text{s}$) to `[Decisive point termination]` ($t_{\text{last}} + 0.50\text{s}$).
 >    - **Zero walking, zero ball-retrieval, zero resting**: A highlight clip must never contain players strolling, retrieving birds, wiping sweat, or scratching heads. The moment the shuttlecock touches the floor or net, the clip must terminate immediately.
->    - **Mid-Rally Dead-Ball Motion Drop Decoupling (中途死球动量骤降解耦)**: For any inter-strike interval $\ge 0.65\text{s}$, the cutter evaluates instantaneous court motion at $t_{\text{hit}} + 0.45\text{s}$. If near-court players freeze ($\text{near\_m} < 2.6$ and $\text{our\_m} < 6.5$) or total court motion collapses ($\text{our\_m} < 4.8$), the rally decouples immediately at the winning hit, preventing adjacent-court smashes during post-point breaks from gluing walking into a bloated clip.
->    - **Racket Double-Tap Ball-Scoop Pruning (球拍捞球双击自动剔除)**: In badminton, players tap the floor twice in rapid succession ($0.35\text{s} \sim 0.50\text{s}$ apart) to bounce the bird off the ground into their hands after a dead-ball walking gap ($\ge 1.35\text{s}$). The cutter automatically detects and strips these trailing pickup taps from the rally.
+>    - **Consecutive Same-Court Stroke Rule & Bilateral Cadence (双侧对攻连续性核验与同半场击球截断)**: Strokes in badminton must alternate across the net. If an inter-strike gap $\ge 0.70\text{s}$ occurs with dormant far court (`far_m < 5.2`) or non-play walking motion (`our_m < 8.8`, `near_m < 10.5`), the rally terminates immediately at the previous stroke with zero trailing dead ball.
+>    - **Ground-Truth Visual Dead-Ball Slicer (落地即止强切断机制)**: Enforced via `detect_visual_deadball_cutoff`. Decouples walking breaks, scoops, and adjacent court smashes, truncating at the exact millisecond the shuttlecock lands on the court.
+>    - **Multi-Tap Ball-Scoop Pruning (球拍捞球连续轻敲自动剔除)**: In badminton, players tap the floor in rapid succession to bounce the bird off the ground into their hands after a dead-ball walking gap ($\ge 1.05\text{s}$). The cutter automatically detects and strips these trailing pickup taps from the rally.
 > 2. **Never Cut Off Prematurely Before Point Finishes (绝对严禁未死球提前截断·网前轻球与高远球物理保全)**:
 >    - **Never cut while players are still actively exchanging shots!** A rally must be preserved in its full entirety from the opening serve until the final winning kill or error lands on the court/net, regardless of whether the rally lasts 10s or 35s+.
 >    - **Soft-Shot Dynamic Capture (网前轻吊·搓放·推球双重声学标定)**: Delicate net tumbles, slices, drops, and net pushes produce acoustic transients around $4.2 \times 10^6 \sim 7.5 \times 10^6$ ($15\sim 30\times$ above background noise). Hit detection uses **Dual-Contrast Acoustic Calibration**: standard strokes at $E \ge 5.0 \times 10^6$ (ratio $\ge 3.0$), plus high-contrast soft touches at $E \ge 4.2 \times 10^6$ (ratio $\ge 20.0$), ensuring subtle net exchanges and baseline high clear defenses are 100% captured without admitting ambient footstep noise.

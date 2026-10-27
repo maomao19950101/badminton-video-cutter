@@ -234,13 +234,52 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     return True
 
 
-def detect_visual_deadball_cutoff(video_path, s_time, e_time, peaks, cap=None):
+def detect_visual_deadball_cutoff(video_path, s_time, e_time, peaks, cap=None, fps=0.0):
     """
-    Multimodal Visual Dead-Ball Safety Verification:
-    The new Rally Ground-Truth Slicer already decouples rallies and truncates at
-    t_last + 0.45s. Bypasses mid-rally cutting to prevent chopping high clears.
+    Ground-Truth Visual Dead-Ball Slicer (落地即止强切断机制 - v1.3.6):
+    Scans candidate rally peaks to find the exact final stroke where active bilateral play ceased.
+    If an inter-stroke gap >= 0.70s shows:
+      1) Dormant far court across the flight window (far_m < 5.2 and near_m < 12.0)
+      2) Player picking up ball / walking / standing intermission (our_m < 8.8 or near_m < 10.2)
+      3) Outer boundary adjacent court dominance (b_max >= 12.0 and b_max >= 1.5 * our_m)
+    Then the rally ended at that stroke, and the ball landed at t_stroke + 0.55s!
+    Truncates e_time immediately to t_stroke + 0.55s, discarding all trailing dead-ball / walking footage.
     """
-    return e_time, peaks
+    if not peaks or len(peaks) < 2 or cap is None or fps <= 0:
+        return e_time, peaks
+
+    sorted_p = sorted(peaks, key=lambda x: x[0])
+    valid_peaks = [sorted_p[0]]
+
+    for i in range(len(sorted_p) - 1):
+        p_curr = sorted_p[i]
+        p_next = sorted_p[i + 1]
+        gap = p_next[0] - p_curr[0]
+
+        pts = [p_curr[0] + 0.45]
+        if gap >= 0.95:
+            pts.append(p_curr[0] + 0.5 * gap)
+
+        point_ended = False
+        for pt in pts:
+            m = sample_instant_motion(cap, fps, pt)
+            if m is not None:
+                our_m, far_m, near_m, top_d, b_max = m
+                if our_m < 7.2 or (far_m < 5.2 and near_m < 12.0):
+                    point_ended = True
+                    break
+                if gap >= 1.05 and (our_m < 8.8 or (near_m < 10.5 and our_m < 9.2)):
+                    point_ended = True
+                    break
+                if b_max >= 12.0 and b_max >= 1.5 * our_m and our_m < 9.5:
+                    point_ended = True
+                    break
+        if point_ended:
+            break
+        valid_peaks.append(p_next)
+
+    real_e_cut = min(e_time, valid_peaks[-1][0] + 0.55)
+    return real_e_cut, valid_peaks
 
 
 def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
@@ -262,24 +301,22 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
     return verified
 
 
-def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None, fps=0.0):
+def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.40, min_dur=5.0, cap=None, fps=0.0):
     """
-    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler:
-    1. Initial Clustering with max_gap=2.85s:
-       Preserves high baseline-to-baseline clears (flight time up to 2.80s) without cutting.
+    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.3.6):
+    1. Initial Clustering with max_gap=2.40s:
+       Preserves high baseline-to-baseline clears without allowing dead intermissions to bridge rallies.
     2. Physical Cadence & Stroke Decoupling:
-       - If a hit has high acoustic energy (smash / kill, E >= 1.8e7) and no return within 1.35s,
-         the point ended at that hit!
-       - If an inter-strike gap >= 1.50s occurs:
-         Visually verifies midpoint motion (sample_instant_motion). Requires active players on-court
-         (our_m >= 9.5), calm boundary corridors (b_max <= 7.2), and steady camera (top_d <= 4.0).
-         If players stopped, walked off, or switched, decouples immediately.
+       - Multi-modal hit verification: filters out adjacent court acoustic spikes during idle/standing.
+       - Inter-strike gap >= 0.70s: checks for mid-rally dead-ball drops (walking, pickup, standing).
+       - Inter-strike gap >= 1.05s: verifies bilateral play and detects player walking/resting (our_m < 8.8).
+       - Outer boundary dominance: rejects adjacent court smashes bleeding into audio (b_max >= 1.5 * our_m).
     3. Terminal Double-Tap & Pickup Pruning:
-       - Eliminates player ball-scoop taps (gap_prev >= 1.35s, gap_tail <= 0.52s).
-       - Eliminates trailing adjacent court bleed / idle taps (gap >= 1.70s with E < 1.8e7).
+       - Eliminates player ball-scoop taps (gap_prev >= 1.05s, gap_tail <= 0.75s).
+       - Eliminates trailing adjacent court bleed / idle taps (gap >= 1.65s with E < 1.8e7).
     4. Strict Zero Dead-Ball Cutoff:
        - s_cut = max(0.0, c[0][0] - 0.70s)  [Opening serve setup & backswing]
-       - e_cut = min(v_dur, c[-1][0] + 0.45s) [Terminates the moment shuttlecock lands on floor / net]
+       - e_cut = min(v_dur, c[-1][0] + 0.50s) [Terminates the moment shuttlecock lands on floor / net]
     """
     if not peaks:
         return []
@@ -289,14 +326,18 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
     for p in peaks:
         if cap is not None and fps > 0:
             m = sample_instant_motion(cap, fps, p[0])
-            if m is not None and (m[0] < 6.0 and m[2] < 2.6):
-                continue
+            if m is not None:
+                our_m, far_m, near_m, top_d, b_max = m
+                if (our_m < 7.0 and near_m < 8.5) or (far_m < 4.8 and near_m < 9.0):
+                    continue
+                if b_max >= 12.0 and b_max >= 1.6 * our_m and our_m < 9.0:
+                    continue
         verified_peaks.append(p)
 
     if not verified_peaks:
         return []
 
-    # 2. Cluster with max_gap = 2.85s (preserves all high clears up to 2.80s)
+    # 2. Cluster with max_gap = 2.40s
     clusters = []
     curr = [verified_peaks[0]]
     for p in verified_peaks[1:]:
@@ -318,17 +359,25 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
             if i + 1 < len(c):
                 gap = c[i + 1][0] - c[i][0]
 
-                # Check 1: Mid-Rally Dead-Ball Motion Drop (落地即止与近半场动量骤降核验)
-                # When near-court players freeze (near_m < 2.6 and our_m < 6.5) or overall motion is dead (our_m < 4.8):
-                # The bird has landed on the floor/net! Decouple immediately at the final stroke c[i].
+                # Check 1: Mid-Rally Dead-Ball Motion Drop & Intermission Severing (落地即止与走动死球核验)
                 is_dead_ball = False
-                if cap is not None and fps > 0 and gap >= 0.65:
-                    t_check = c[i][0] + 0.45
-                    m_dead = sample_instant_motion(cap, fps, t_check)
-                    if m_dead is not None:
-                        our_m, far_m, near_m, top_d, b_max = m_dead
-                        if (near_m < 2.6 and our_m < 6.5) or (our_m < 4.8):
-                            is_dead_ball = True
+                if cap is not None and fps > 0 and gap >= 0.70:
+                    pts = [c[i][0] + 0.45]
+                    if gap >= 0.95:
+                        pts.append(c[i][0] + 0.5 * gap)
+                    for pt in pts:
+                        m_dead = sample_instant_motion(cap, fps, pt)
+                        if m_dead is not None:
+                            our_m, far_m, near_m, top_d, b_max = m_dead
+                            if (near_m < 9.5 and far_m < 6.0) or our_m < 7.5:
+                                is_dead_ball = True
+                                break
+                            if gap >= 1.05 and (our_m < 8.8 or (near_m < 10.5 and our_m < 9.2)):
+                                is_dead_ball = True
+                                break
+                            if b_max >= 12.0 and b_max >= 1.5 * our_m and our_m < 9.5:
+                                is_dead_ball = True
+                                break
 
                 if is_dead_ball:
                     decoupled.append(sub)
@@ -337,9 +386,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                     continue
 
                 # Check 2: High Clear & Dead-Ball Decoupling (Multi-Point Flight Verification)
-                # Gaps < 1.75s are normal rally stroke exchanges (including drops and smash returns).
-                # Gaps >= 1.75s are either high clears in flight or point terminations/intermissions.
-                if gap >= 1.75:
+                if gap >= 1.70:
                     is_live_clear = False
                     has_continuation = False
                     if i + 2 < len(c):
@@ -356,7 +403,6 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                             max_court = max(max(m[1], m[2]) for m in motions)
                             min_top = min(m[3] for m in motions)
                             max_b = max(m[4] for m in motions)
-                            # Boundary walk-off: extreme edge activity (max_b >= 20.0) or edge exit with low court play (max_b >= 12.0 and max_our < 8.0)
                             is_walk_off = (max_b >= 20.0) or (max_b >= 12.0 and max_our < 8.0)
                             if min_top <= 4.0 and not is_walk_off:
                                 if has_continuation and (max_our >= 9.0 or (max_court >= 13.0 and max_our >= 8.0)):
@@ -374,17 +420,17 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
         if sub:
             decoupled.append(sub)
 
-    # 3. Prune trailing double-tap pickups and trailing idle noise
+    # 4. Prune trailing double-tap pickups and trailing idle noise
     rallies = []
     for c in decoupled:
         while len(c) >= 3:
             times = [p[0] for p in c]
-            # Double tap pickup: gap_prev >= 1.35s and gap_tail <= 0.52s
-            if len(c) >= 3 and (times[-2] - times[-3]) >= 1.35 and (times[-1] - times[-2]) <= 0.52:
+            # Double tap pickup: preceding gap >= 1.05s and tail gap <= 0.75s
+            if len(c) >= 3 and (times[-2] - times[-3]) >= 1.05 and (times[-1] - times[-2]) <= 0.75:
                 c = c[:-2]
                 continue
-            # Single tail tap with gap >= 1.70s
-            if len(c) >= 2 and (times[-1] - times[-2]) >= 1.70:
+            # Single tail tap with gap >= 1.65s
+            if len(c) >= 2 and (times[-1] - times[-2]) >= 1.65:
                 if c[-1][1] < 1.8e7:
                     c = c[:-1]
                     continue
@@ -394,7 +440,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
             continue
 
         s_cut = max(0.0, c[0][0] - 0.70)
-        e_cut = min(v_dur, c[-1][0] + 0.45)
+        e_cut = min(v_dur, c[-1][0] + 0.50)
         dur = e_cut - s_cut
         if dur >= min_dur and len(c) >= 3:
             rallies.append({
@@ -411,7 +457,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
 
 def extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur):
     """
-    Multimodal Visual Serve-Kill Verification Protocol (v1.3.5 Ground-Landing Guaranteed):
+    Multimodal Visual Serve-Kill Verification Protocol (v1.3.6 Ground-Landing Guaranteed):
     1. Mandatory Acoustic Isolation:
        - Server hits bird (t_serve) within 0.45s ~ 1.70s before receiver's kill impact (t_k).
        - Zero acoustic strikes within [t_k + 0.25, t_k + 3.20] (proves rally did NOT continue).
@@ -784,7 +830,7 @@ def main():
 
                     # Apply high-speed visual dead-ball motion cutoff if enabled
                     if args.strict_visual and HAS_CV2 and cap is not None:
-                        e_cut, r_peaks = detect_visual_deadball_cutoff(vpath, s_cut, e_cut, r_peaks, cap=cap)
+                        e_cut, r_peaks = detect_visual_deadball_cutoff(vpath, s_cut, e_cut, r_peaks, cap=cap, fps=fps)
 
                     dur = e_cut - s_cut
                     if dur < 5.0 or len(r_peaks) < 3:
