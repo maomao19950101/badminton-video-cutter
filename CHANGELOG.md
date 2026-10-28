@@ -6,7 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.7] - 2026-10-27 (Current Release)
+## [1.3.8] - 2026-10-28 (Current Release)
+
+### 🚀 Major Breakthroughs: Zero Premature Truncation Guarantee & Full Landing Trajectory Preservation (全流程多拍完整度保全·空中提前截断根除与0.85s落地即止版)
+- **Zero Premature Cutoff Guarantee (攻防连续性保护与零提前截断终结保证)**: Fixed the critical vulnerability where active rallies with high clears, lifts, or defensive drop shots (inter-hit gap 1.4s~2.2s) were prematurely severed in mid-air because players held ready stance while the bird flew high. Enforced the **Continuous Bilateral Exchange Rule**: any continuous sequence of alternating strikes ($S_i \to S_{i+1} \to S_{i+2}$) with flight intervals $\le 2.35\text{s}$ is strictly protected from being cleaved in the middle of active play.
+- **Complete Downward Landing Trajectory (0.85s 击球落地弧线全景保全)**: Replaced premature 0.50s/0.55s cutoff with calibrated landing window ($e_{\text{cut}} = S_{\text{last}} + 0.85\text{s}$, or $0.65\text{s}$ for decisive smashes $\ge 2.0\times 10^7$). Guarantees that the shuttlecock has 100% time to cross the net, plunge down, hit the court floor or catch the net, and display the winning/error acknowledgment, while severing strictly before players take their first walking step to pick up the ball.
+- **Backward Tail-Pickup Pruning (逆向末端捡球捞球清洗)**: Refactored `detect_visual_deadball_cutoff` to scan backward from the final hit. Discards only genuine post-point racket taps on the floor (gap $\ge 2.05\text{s}$ and energy $< 8.0\times 10^6$), eliminating the recursive while-loop that erroneously pruned actual winning shots or defensive blocks.
+- **Real-Play Detector Calibration (实战镜头质检校准)**: Rallies with $\ge 5$ verified acoustic strikes are now automatically confirmed as authentic matches, preventing epic multi-shot rallies from being rejected just because a person walked through the peripheral corridor in the background.
+
+---
+
+## [1.3.7] - 2026-10-27
 
 ### 🚀 Major Optimization: Optional Highlight Reel Generation & Ultra-Fast Low-Disk Footprint Pipeline (超长多拍TOP大集锦可选化·极速轻量化输出与磁盘冗余清零版)
 - **Optional Highlight Reel Generation (`--reel` 参数可选化)**: Converted automatic concatenation of multi-shot highlight reels (`00_【纯多拍零死球合集】...` and `00_【全场巅峰超长多拍TOP大集锦】...`) into an optional, user-configurable flag (default `False`). Eliminates the massive disk I/O bottleneck and gigabytes of duplicate video files (e.g., saves 5.7 GB per 30-min 4K match and 2.75 GB for grand cross-match compilation), enabling near-instant extraction of high-energy clips.

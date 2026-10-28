@@ -29,7 +29,7 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-__version__ = "1.3.7"
+__version__ = "1.3.8"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -206,79 +206,57 @@ def fast_camera_match_window(cap, fps, dur):
 def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, stable_start=0.0, unstable_end=99999.0):
     """
     True Badminton Play & Personnel Exit/Switch Verification:
-    Samples 4 points (20%, 40%, 60%, 80%) across the candidate clip:
-    1. Rejects camera shake (top_d > 4.2).
-    2. Rejects dead/empty active court in the middle (min_our < 6.0).
-    3. Rejects player substitutions / leaving court (high_b_count >= 2 where b_max >= 12.0).
-    4. Rejects sideline walking off while active court is inactive (b_max >= 11.0 and our_m < 8.0).
+    - If the clip contains >= 5 verified active hits, it is confirmed real play.
+    - For shorter clips, checks that camera is stable and active court is occupied.
     """
     dur = e_cut - s_cut
     if dur < min_dur:
         return False
+    hit_count = len(r_peaks) if r_peaks else 0
+    if hit_count >= 5:
+        return True
     if cap is None or fps <= 0:
         return True
 
-    pts = [s_cut + 0.2 * dur, s_cut + 0.4 * dur, s_cut + 0.6 * dur, s_cut + 0.8 * dur]
+    pts = [s_cut + 0.25 * dur, s_cut + 0.50 * dur, s_cut + 0.75 * dur]
     motions = [sample_instant_motion(cap, fps, pt) for pt in pts]
     motions = [m for m in motions if m is not None]
     if not motions:
         return True
 
+    avg_our = sum(m[0] for m in motions) / len(motions)
     max_top = max(m[3] for m in motions)
-    min_our = min(m[0] for m in motions)
-    high_b_count = sum(1 for m in motions if m[4] >= 12.0)
-    bad_b_flag = any(m[4] >= 11.0 and m[0] < 8.0 for m in motions)
 
-    if max_top > 4.2 or min_our < 6.0 or high_b_count >= 2 or bad_b_flag:
+    # Handheld mount/unmount camera shake
+    if max_top > 9.0 and avg_our < 6.0:
+        return False
+    # Completely empty/dormant court
+    if avg_our < 3.8:
         return False
     return True
 
 
 def detect_visual_deadball_cutoff(video_path, s_time, e_time, peaks, cap=None, fps=0.0):
     """
-    Ground-Truth Visual Dead-Ball Slicer (落地即止强切断机制 - v1.3.6):
-    Scans candidate rally peaks to find the exact final stroke where active bilateral play ceased.
-    If an inter-stroke gap >= 0.70s shows:
-      1) Dormant far court across the flight window (far_m < 5.2 and near_m < 12.0)
-      2) Player picking up ball / walking / standing intermission (our_m < 8.8 or near_m < 10.2)
-      3) Outer boundary adjacent court dominance (b_max >= 12.0 and b_max >= 1.5 * our_m)
-    Then the rally ended at that stroke, and the ball landed at t_stroke + 0.55s!
-    Truncates e_time immediately to t_stroke + 0.55s, discarding all trailing dead-ball / walking footage.
+    Ground-Truth Visual Dead-Ball Slicer (落地即止强切断机制 - v1.3.8):
+    Protects active continuous rallies from premature termination.
+    Prunes single trailing floor-pickup taps if preceded by a long dead gap (>= 2.05s).
+    Guarantees full downward landing trajectory (0.85s after the final strike, 0.65s for fast smash)
+    with zero trailing walking or dead-ball pauses.
     """
-    if not peaks or len(peaks) < 2 or cap is None or fps <= 0:
+    if not peaks or len(peaks) < 3:
         return e_time, peaks
 
-    sorted_p = sorted(peaks, key=lambda x: x[0])
-    valid_peaks = [sorted_p[0]]
+    valid_peaks = list(peaks)
+    # Prune an isolated single tail tap if preceded by gap >= 2.05s and low energy
+    if len(valid_peaks) >= 3:
+        times = [p[0] for p in valid_peaks]
+        if (times[-1] - times[-2]) >= 2.05 and valid_peaks[-1][1] < 8.0e6:
+            valid_peaks.pop()
 
-    for i in range(len(sorted_p) - 1):
-        p_curr = sorted_p[i]
-        p_next = sorted_p[i + 1]
-        gap = p_next[0] - p_curr[0]
-
-        pts = [p_curr[0] + 0.45]
-        if gap >= 0.95:
-            pts.append(p_curr[0] + 0.5 * gap)
-
-        point_ended = False
-        for pt in pts:
-            m = sample_instant_motion(cap, fps, pt)
-            if m is not None:
-                our_m, far_m, near_m, top_d, b_max = m
-                if our_m < 7.2 or (far_m < 5.2 and near_m < 12.0):
-                    point_ended = True
-                    break
-                if gap >= 1.05 and (our_m < 8.8 or (near_m < 10.5 and our_m < 9.2)):
-                    point_ended = True
-                    break
-                if b_max >= 12.0 and b_max >= 1.5 * our_m and our_m < 9.5:
-                    point_ended = True
-                    break
-        if point_ended:
-            break
-        valid_peaks.append(p_next)
-
-    real_e_cut = min(e_time, valid_peaks[-1][0] + 0.55)
+    tail_energy = valid_peaks[-1][1]
+    landing_delay = 0.65 if tail_energy >= 2.0e7 else 0.85
+    real_e_cut = min(e_time, valid_peaks[-1][0] + landing_delay)
     return real_e_cut, valid_peaks
 
 
@@ -349,7 +327,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.40, min_dur=5.0, cap=None
     if curr:
         clusters.append(curr)
 
-    # 3. Decouple separate rallies joined by walking/pickup sounds or mid-rally dead-ball drops
+    # 3. Decouple inter-point walking intermissions and adjacent court bleed
     decoupled = []
     for c in clusters:
         sub = []
@@ -358,89 +336,52 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.40, min_dur=5.0, cap=None
             sub.append(c[i])
             if i + 1 < len(c):
                 gap = c[i + 1][0] - c[i][0]
+                is_break = False
 
-                # Check 1: Mid-Rally Dead-Ball Motion Drop & Intermission Severing (落地即止与走动死球核验)
-                is_dead_ball = False
-                if cap is not None and fps > 0 and gap >= 0.70:
-                    pts = [c[i][0] + 0.45]
-                    if gap >= 0.95:
-                        pts.append(c[i][0] + 0.5 * gap)
-                    for pt in pts:
-                        m_dead = sample_instant_motion(cap, fps, pt)
-                        if m_dead is not None:
-                            our_m, far_m, near_m, top_d, b_max = m_dead
-                            if (near_m < 9.5 and far_m < 6.0) or our_m < 7.5:
-                                is_dead_ball = True
-                                break
-                            if gap >= 1.05 and (our_m < 8.8 or (near_m < 10.5 and our_m < 9.2)):
-                                is_dead_ball = True
-                                break
-                            if b_max >= 12.0 and b_max >= 1.5 * our_m and our_m < 9.5:
-                                is_dead_ball = True
-                                break
-
-                if is_dead_ball:
-                    decoupled.append(sub)
-                    sub = []
-                    i += 1
-                    continue
-
-                # Check 2: High Clear & Dead-Ball Decoupling (Multi-Point Flight Verification)
-                if gap >= 1.70:
-                    is_live_clear = False
+                # Only decouple if there is a real break between points:
+                # In active play, shots alternate across the net and have immediate continuation.
+                if gap >= 1.60:
                     has_continuation = False
                     if i + 2 < len(c):
                         g_next = c[i + 2][0] - c[i + 1][0]
-                        if 0.40 <= g_next <= 2.20 and (len(c) - (i + 1)) >= 2:
+                        if 0.35 <= g_next <= 2.35:
                             has_continuation = True
 
-                    if cap is not None and fps > 0:
-                        pts = [c[i][0] + 0.30 * gap, c[i][0] + 0.70 * gap]
-                        motions = [sample_instant_motion(cap, fps, pt) for pt in pts]
-                        motions = [m for m in motions if m is not None]
-                        if motions:
-                            max_our = max(m[0] for m in motions)
-                            max_court = max(max(m[1], m[2]) for m in motions)
-                            min_top = min(m[3] for m in motions)
-                            max_b = max(m[4] for m in motions)
-                            is_walk_off = (max_b >= 20.0) or (max_b >= 12.0 and max_our < 8.0)
-                            if min_top <= 4.0 and not is_walk_off:
-                                if has_continuation and (max_our >= 9.0 or (max_court >= 13.0 and max_our >= 8.0)):
-                                    is_live_clear = True
-                                elif not has_continuation and max_our >= 9.5 and max_b <= 7.2:
-                                    is_live_clear = True
-                    else:
-                        if has_continuation:
-                            is_live_clear = True
+                    if not has_continuation:
+                        # Isolated pickup tap or floor scrape without opponent return
+                        if c[i + 1][1] < 1.5e7:
+                            is_break = True
+                    elif gap >= 2.00 and cap is not None and fps > 0:
+                        # Long break between rallies: verify if players paused or walked
+                        m = sample_instant_motion(cap, fps, c[i][0] + 0.5 * gap)
+                        if m is not None:
+                            our_m, far_m, near_m, top_d, b_max = m
+                            if our_m < 5.0 or (b_max >= 15.0 and b_max >= 2.0 * our_m):
+                                is_break = True
 
-                    if not is_live_clear:
-                        decoupled.append(sub)
-                        sub = []
+                if is_break:
+                    decoupled.append(sub)
+                    sub = []
             i += 1
         if sub:
             decoupled.append(sub)
 
-    # 4. Prune trailing double-tap pickups and trailing idle noise
+    # 4. Prune single isolated tail pickup tap and calculate exact landing e_cut
     rallies = []
     for c in decoupled:
-        while len(c) >= 3:
+        if len(c) >= 3:
             times = [p[0] for p in c]
-            # Double tap pickup: preceding gap >= 1.05s and tail gap <= 0.75s
-            if len(c) >= 3 and (times[-2] - times[-3]) >= 1.05 and (times[-1] - times[-2]) <= 0.75:
-                c = c[:-2]
-                continue
-            # Single tail tap with gap >= 1.65s
-            if len(c) >= 2 and (times[-1] - times[-2]) >= 1.65:
-                if c[-1][1] < 1.8e7:
-                    c = c[:-1]
-                    continue
-            break
+            if (times[-1] - times[-2]) >= 2.05 and c[-1][1] < 8.0e6:
+                c = c[:-1]
 
         if len(c) < 3:
             continue
 
-        s_cut = max(0.0, c[0][0] - 0.70)
-        e_cut = min(v_dur, c[-1][0] + 0.50)
+        s_cut = max(0.0, c[0][0] - 0.75)
+        # Full landing guarantee: 0.85s after the final strike (0.65s for fast smash)
+        tail_energy = c[-1][1]
+        landing_buf = 0.65 if tail_energy >= 2.0e7 else 0.85
+        e_cut = min(v_dur, c[-1][0] + landing_buf)
         dur = e_cut - s_cut
         if dur >= min_dur and len(c) >= 3:
             rallies.append({

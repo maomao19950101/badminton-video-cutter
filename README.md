@@ -1,7 +1,7 @@
 # 🏸 Badminton Video Cutter (羽毛球实战视频智能精彩剪辑器)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.3.7-blue.svg?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.3.8-blue.svg?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/python-3.10+-brightgreen.svg?style=flat-square" alt="Python">
   <img src="https://img.shields.io/badge/ffmpeg-4K_UHD_StreamCopy-orange.svg?style=flat-square" alt="FFmpeg">
   <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License">
@@ -16,6 +16,9 @@
 - 🏸 **纯多拍对攻拉锯集锦 (Multi-Shot Rallies)**
   - 自动识别激烈回合对攻，智能区分 5~15 秒【多拍激烈对攻】与 15 秒以上【超长高能拉锯】。
   - 单独输出独立精彩小视频，告别几十 GB 冗余占用，随时分享。
+- 🛡️ **攻防连续性保护与零提前截断 (Zero Premature Truncation - v1.3.8)**
+  - 建立**多拍连续对攻链条保护机制**：对攻连贯回合内（$S_i \to S_{i+1} \to S_{i+2}$）坚决杜绝因高远球高飞选手短暂蓄势导致的“空中腰斩”，全量保全每一次击球对决！
+  - **完整落地弧线保全（0.85s）**：剪辑终结点严格延展至最后一拍后 0.85 秒（暴杀 0.65 秒），完整展现羽毛球下坠砸地、触网反弹与得分终结全轨迹，并在捡球走动开始前毫秒级斩断。
 - 🎞️ **可选生成巅峰大合集 (Optional Reel Generation - v1.3.7)**
   - 默认极速直出独立高能切片，**无多余磁盘 I/O 损耗**；如需长视频，仅需添加 `--reel` 即可一键拼接单场及跨场全巅峰合集（`00_【纯多拍零死球合集】_全N段精选版.mp4` / `00_【全场巅峰超长多拍TOP大集锦】...`）。
 - ⚡ **接发突击一拍定死大赏 (Serve-and-Kill Moments)**
