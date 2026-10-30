@@ -29,6 +29,12 @@ try:
 except ImportError:
     HAS_CV2 = False
 
+from match_segmenter import (
+    extract_serve_keyframe,
+    extract_court_player_embeddings,
+    partition_rallies_by_game
+)
+
 __version__ = "1.3.8"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
@@ -299,21 +305,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.40, min_dur=5.0, cap=None
     if not peaks:
         return []
 
-    # 1. Multi-modal hit verification: filter out adjacent court acoustic spikes during dead court
-    verified_peaks = []
-    for p in peaks:
-        if cap is not None and fps > 0:
-            m = sample_instant_motion(cap, fps, p[0])
-            if m is not None:
-                our_m, far_m, near_m, top_d, b_max = m
-                if (our_m < 7.0 and near_m < 8.5) or (far_m < 4.8 and near_m < 9.0):
-                    continue
-                if b_max >= 12.0 and b_max >= 1.6 * our_m and our_m < 9.0:
-                    continue
-        verified_peaks.append(p)
-
-    if not verified_peaks:
-        return []
+    verified_peaks = peaks
 
     # 2. Cluster with max_gap = 2.40s
     clusters = []
@@ -674,6 +666,9 @@ def main():
     parser.add_argument("--slowmo", action="store_true", help="Generate broadcast-grade 0.4x slow motion replays")
     parser.add_argument("--hud", action="store_true", help="Generate on-screen verified shot counter HUD for top rallies")
     parser.add_argument("--strict-visual", action="store_true", default=True, help="Enforce visual dead-ball motion drop truncation")
+    parser.add_argument("--split-by-game", dest="split_by_game", action="store_true", default=True, help="Automatically group rallies into game subfolders by player ReID (default: True)")
+    parser.add_argument("--no-split-by-game", dest="split_by_game", action="store_false", help="Disable game grouping and output all rallies in a flat directory")
+    parser.add_argument("--lineup-threshold", type=float, default=0.65, help="Similarity threshold for detecting player lineup substitution (default: 0.65)")
     parser.add_argument("--ffmpeg", default=DEFAULT_FFMPEG, help="Path to ffmpeg executable")
     args = parser.parse_args()
 
@@ -751,10 +746,8 @@ def main():
             if args.mode in ["duopai", "all"]:
                 rallies = extract_multi_shot_rallies(peaks, v_dur, cap=cap, fps=fps)
                 print(f"  🏸 Found {len(rallies)} raw candidate rallies")
-                pad = 2 if len(rallies) < 100 else 3
 
-                cut_tasks = []
-                valid_r_idx = 0
+                valid_rallies = []
                 for r in rallies:
                     s_cut = r["s_cut"]
                     e_cut = r["e_cut"]
@@ -778,36 +771,126 @@ def main():
                     if dur < 5.0 or len(r_peaks) < 3:
                         continue
 
-                    valid_r_idx += 1
-                    label = "【超长高能拉锯】" if dur >= 15.0 else "【多拍激烈对攻】"
-                    name = f"多拍{valid_r_idx:0{pad}d}_{format_time_zh(s_cut)}至{format_time_zh(e_cut)}_{label}_{int(round(dur))}秒.mp4"
-                    clip_p = os.path.join(match_dir, name)
-                    cut_tasks.append((valid_r_idx, s_cut, dur, clip_p, dur >= 15.0))
+                    valid_rallies.append({
+                        "s_cut": s_cut,
+                        "e_cut": e_cut,
+                        "dur": dur,
+                        "peaks": r_peaks
+                    })
+
+                cut_tasks = []
+                all_game_dirs = []
+
+                if args.split_by_game and len(valid_rallies) > 1:
+                    print(f"  🏸 Analyzing player lineup ReID for {len(valid_rallies)} rallies...")
+                    embeddings_list = []
+                    for vr in valid_rallies:
+                        try:
+                            frame = extract_serve_keyframe(vpath, vr["s_cut"], ffmpeg_bin=args.ffmpeg)
+                            embs = extract_court_player_embeddings(frame, num_players=4)
+                        except Exception:
+                            embs = [np.zeros(512, dtype=np.float32) for _ in range(4)]
+                        embeddings_list.append(embs)
+
+                    partition_input = [
+                        {"index": i, "start_time": vr["s_cut"], "end_time": vr["e_cut"], "data": vr}
+                        for i, vr in enumerate(valid_rallies)
+                    ]
+                    game_groups = partition_rallies_by_game(
+                        partition_input,
+                        embeddings_list,
+                        threshold=args.lineup_threshold,
+                        rest_gap_seconds=60.0
+                    )
+                    print(f"  🏆 Identified {len(game_groups)} distinct game(s) in match based on player lineups.")
+
+                    summary_lines = [
+                        "=" * 60,
+                        "🏸 羽毛球实战视频全自动分局与球员重识别报告 (Match Summary)",
+                        "=" * 60,
+                        f"视频源文件: {os.path.basename(vpath)}",
+                        f"识别总多拍: {len(valid_rallies)} 处",
+                        f"划分球局数: {len(game_groups)} 局",
+                        "-" * 60
+                    ]
+
+                    for g_idx, g_items in enumerate(game_groups, 1):
+                        g_rallies = [item["data"] for item in g_items]
+                        g_start = g_rallies[0]["s_cut"]
+                        g_end = g_rallies[-1]["e_cut"]
+                        g_dur = g_end - g_start
+                        g_dir_name = f"第{g_idx:02d}局_实战对阵_{len(g_rallies)}拍"
+                        g_dir_path = os.path.join(match_dir, g_dir_name)
+                        os.makedirs(g_dir_path, exist_ok=True)
+                        all_game_dirs.append((g_dir_path, g_idx, len(g_rallies)))
+
+                        summary_lines.append(
+                            f"第{g_idx:02d}局 (共 {len(g_rallies):02d} 拍):\n"
+                            f"  时间跨度: {format_time_zh(g_start)} 至 {format_time_zh(g_end)} (比赛时长: {int(g_dur//60)}分{int(round(g_dur%60))}秒)\n"
+                            f"  多拍序号: 多拍01 ~ 多拍{len(g_rallies):02d}\n"
+                            f"  保存目录: {g_dir_name}/\n"
+                        )
+
+                        gpad = 2 if len(g_rallies) < 100 else 3
+                        for r_idx, vr in enumerate(g_rallies, 1):
+                            dur = vr["dur"]
+                            label = "【超长高能拉锯】" if dur >= 15.0 else "【多拍激烈对攻】"
+                            name = f"多拍{r_idx:0{gpad}d}_{format_time_zh(vr['s_cut'])}至{format_time_zh(vr['e_cut'])}_{label}_{int(round(dur))}秒.mp4"
+                            clip_p = os.path.join(g_dir_path, name)
+                            cut_tasks.append((r_idx, vr["s_cut"], dur, clip_p, dur >= 15.0, g_dir_path))
+
+                    summary_lines.append("=" * 60)
+                    summary_path = os.path.join(match_dir, "game_summary.txt")
+                    with open(summary_path, "w", encoding="utf-8") as f_sum:
+                        f_sum.write("\n".join(summary_lines) + "\n")
+                    print(f"  📝 Game summary saved to: {summary_path}")
+
+                else:
+                    pad = 2 if len(valid_rallies) < 100 else 3
+                    for r_idx, vr in enumerate(valid_rallies, 1):
+                        dur = vr["dur"]
+                        label = "【超长高能拉锯】" if dur >= 15.0 else "【多拍激烈对攻】"
+                        name = f"多拍{r_idx:0{pad}d}_{format_time_zh(vr['s_cut'])}至{format_time_zh(vr['e_cut'])}_{label}_{int(round(dur))}秒.mp4"
+                        clip_p = os.path.join(match_dir, name)
+                        cut_tasks.append((r_idx, vr["s_cut"], dur, clip_p, dur >= 15.0, match_dir))
 
                 # Ultra-fast parallel lossless stream cutting (-c copy)
                 print(f"  ⚡ Parallel stream cutting {len(cut_tasks)} clean multi-shot clips...")
                 clip_paths = []
+                dir_to_clips = {}
                 if cut_tasks:
                     def _do_cut(task):
-                        c_idx, s, d, out, is_long = task
+                        c_idx, s, d, out, is_long, pdir = task
                         cut_lossless(args.ffmpeg, vpath, s, d, out)
-                        return c_idx, out, is_long
+                        return c_idx, out, is_long, pdir
 
                     with ThreadPoolExecutor(max_workers=8) as executor:
                         results = list(executor.map(_do_cut, cut_tasks))
                         results.sort(key=lambda x: x[0])
                         clip_paths = [r[1] for r in results]
                         for r in results:
+                            pdir = r[3]
+                            if pdir not in dir_to_clips:
+                                dir_to_clips[pdir] = []
+                            dir_to_clips[pdir].append(r[1])
                             if r[2]:
                                 all_grand_rallies.append(r[1])
 
                 if clip_paths:
                     if args.reel:
-                        reel_name = f"00_【{display_name}_纯多拍零死球合集】_全{len(clip_paths)}段精选版.mp4"
-                        concat_clips(args.ffmpeg, clip_paths, os.path.join(match_dir, reel_name))
-                        print(f"  🎞️ Created multi-shot reel: {reel_name}")
+                        if all_game_dirs:
+                            for g_dir_path, g_idx, g_count in all_game_dirs:
+                                g_clips = dir_to_clips.get(g_dir_path, [])
+                                if g_clips:
+                                    reel_name = f"00_【第{g_idx:02d}局_纯多拍合集】_全{len(g_clips)}段精选版.mp4"
+                                    concat_clips(args.ffmpeg, g_clips, os.path.join(g_dir_path, reel_name))
+                                    print(f"  🎞️ Created game {g_idx} reel: {reel_name}")
+                        else:
+                            reel_name = f"00_【{display_name}_纯多拍零死球合集】_全{len(clip_paths)}段精选版.mp4"
+                            concat_clips(args.ffmpeg, clip_paths, os.path.join(match_dir, reel_name))
+                            print(f"  🎞️ Created multi-shot reel: {reel_name}")
                     else:
-                        print(f"  💡 跳过单场多拍大合集拼接（已保存 {len(clip_paths)} 段独立高质量切片，极速节省空间。如需大合集请添加 --reel 参数）")
+                        print(f"  💡 跳过多拍大合集拼接（已保存 {len(clip_paths)} 段独立高质量切片，极速节省空间。如需大合集请添加 --reel 参数）")
 
                 if args.hud:
                     hud_dir = os.path.join(match_dir, "转播级HUD特效")
