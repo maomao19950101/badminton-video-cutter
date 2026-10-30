@@ -312,14 +312,14 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
 
 def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None, fps=0.0, vpath=None):
     """
-    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.4):
+    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.5):
     1. Initial Clustering with max_gap=2.85s:
        Preserves high baseline-to-baseline clears (flight time up to 2.80s) without premature truncation.
     2. Physical Cadence & Stroke Decoupling:
        - Post-Smash Winner Drop & Defense Continuation: Decouples post-smash dead-ball floor taps
-         only when a smash occurred prior to c[i] and is followed by dead-ball intermission taps.
-         Guarantees that a smash followed by defensive return (and counter-stroke) is preserved intact
-         until true rally completion.
+         only when a smash occurred prior to c[i] and all subsequent hits are weak floor taps (< 1.8e7).
+         Guarantees that a smash followed by defensive return, counter-stroke, or high clears is preserved
+         intact until true rally completion without mid-rally cleaving.
        - Inter-Point Break / Pre-Serve Gap: If gap >= 2.10s preceded by weak floor tap or followed by a serve return,
          severs the intermission cleanly before the new serve.
        - Single dead-ball tap without continuation: prunes isolated floor scoops.
@@ -367,10 +367,10 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                 # NEVER break if c[i+1] is the final stroke of the cluster (preserve final return/landing).
                 had_prior_smash = any(c[k][1] >= 4.5e7 for k in range(max(0, i - 2), i))
                 if had_prior_smash and gap >= 0.70 and c[i + 1][1] < 2.0e7 and (i + 1 < len(c) - 1):
-                    # Check if subsequent sequence contains a genuine attack/serve or only floor taps
+                    # If subsequent sequence contains no active attacking strokes (E < 1.8e7),
+                    # then c[i] was the terminal ground contact/block and c[i+1] is a dead-ball floor scoop.
                     has_active_play_ahead = any(c[k][1] >= 1.8e7 for k in range(i + 1, min(len(c), i + 6)))
-                    has_serve_ahead = any((c[k+1][0] - c[k][0] >= 2.00) for k in range(i + 1, len(c) - 1))
-                    if not has_active_play_ahead or has_serve_ahead:
+                    if not has_active_play_ahead:
                         is_break = True
 
                 # Rule 2: Inter-point break / pre-serve gap

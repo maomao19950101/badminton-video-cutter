@@ -150,6 +150,55 @@ class TestRallyDecoupling(unittest.TestCase):
         self.assertAlmostEqual(r["first_hit"], 50.00, places=2)
         self.assertAlmostEqual(r["last_hit"], 54.80, places=2)
 
+    def test_preserve_multi_shot_rally_with_intermediate_smash_and_clear(self):
+        """
+        Tests that an extended rally containing an intermediate smash,
+        defensive return, subsequent high clear, and continuation attacks
+        is preserved intact as a single 20s+ rally without being cleaved in half.
+        Simulated sequence representing Rally 40 from Match 2:
+        - 715.32: Serve
+        - 716.47: Return
+        - 718.25: Intermediate smash (E=6.38e7)
+        - 719.07: Defensive return (gap=0.82s, E=1.04e7)
+        - 720.54: Counter-stroke (gap=1.47s, E=9.34e6)
+        - 722.62: Deep high clear (gap=2.08s, E=9.70e6)
+        - 722.97: Attack (gap=0.35s, E=1.99e7)
+        - 724.90: Drive attack (E=2.35e7)
+        - 725.83: Smash attack (E=4.07e7)
+        - 726.80: Defense (E=1.05e7)
+        - 728.29: Lift (E=5.66e6)
+        - 729.35: Attack (E=2.89e7)
+        - 731.17: Drive (E=1.83e7)
+        - 733.15: Counter (E=2.43e7)
+        - 733.68: Smash kill (E=6.67e7)
+        - 734.21: Block / landing (E=4.32e7)
+        """
+        peaks = [
+            (715.32, 7.73e6),
+            (716.47, 4.50e6),
+            (718.25, 6.38e7),
+            (719.07, 1.04e7),
+            (720.54, 9.34e6),
+            (722.62, 9.70e6),
+            (722.97, 1.99e7),
+            (724.90, 2.35e7),
+            (725.83, 4.07e7),
+            (726.80, 1.05e7),
+            (728.29, 5.66e6),
+            (729.35, 2.89e7),
+            (731.17, 1.83e7),
+            (733.15, 2.43e7),
+            (733.68, 6.67e7),
+            (734.21, 4.32e7),
+        ]
+        v_dur = 1812.0
+        rallies = extract_multi_shot_rallies(peaks, v_dur)
+        self.assertEqual(len(rallies), 1, "Rally with intermediate smash and clear must remain 1 continuous rally")
+        r = rallies[0]
+        self.assertEqual(r["hits"], 16)
+        self.assertAlmostEqual(r["first_hit"], 715.32, places=2)
+        self.assertAlmostEqual(r["last_hit"], 734.21, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

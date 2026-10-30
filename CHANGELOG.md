@@ -6,7 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.4] - 2026-10-30 (Current Release)
+## [1.4.5] - 2026-10-30 (Current Release)
+
+### 🚀 Major Fix: Multi-Shot Continuation Immunity & Intermediate Smash Cleaving Elimination (中局杀球攻防相持免疫与长多拍腰斩彻底修复版)
+- **Intermediate Smash Continuation Immunity (中局杀球防守反击相持态免疫·杜绝长拉锯中途劈开)**:
+  - Eliminated the global `has_serve_ahead` false trigger in Rule 1: A smash followed by defensive return and counter-attack ($E \ge 1.8\times 10^7$) is ACTIVE play, regardless of whether a deep high clear ($gap \ge 2.0\text{s}$) or future serve exists later in the match window.
+  - Enforced strict dead-ball drop criteria: A post-smash sequence is ONLY decoupled if ALL subsequent hits are weak floor taps ($E < 1.8\times 10^7$ without attack), preventing active 20s+ multi-shot rallies from being chopped into disjointed fragments.
+  - Completely resolved `多拍40` in Match 2 (`051`): Combined premature 5.3s `多拍40` (11分54秒至11分59秒, 4 hits) and subsequent `多拍41` (11分59秒至12分14秒, 19 hits) into a single continuous, complete 20.3-second, 23-hit epic multi-shot rally (`多拍39_11分54秒至12分14秒_【超长高能拉锯】_20秒.mp4`), fully capturing the serve, intermediate smash, diving lift return, deep high clear, rapid flat drives, and the final jump-smash winner!
+
+---
+
+## [1.4.4] - 2026-10-30
 
 ### 🚀 Major Fix: Smash Defense Continuation & Opening Serve Aerodynamic Protection (杀球防守反击全链路保全与发球高远起手保护版)
 - **Smash Defense & Counter-Stroke Preservation (杀球防守起球与反击连贯性保全·杜绝扣杀空中截断)**:
