@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.3.6
-description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
+version: 1.4.0
+description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), segmenting matches by player lineups/games (球员识别与全自动球局分段), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.3.6)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.4.0)
 
-> **Current Release**: `v1.3.6` (2026-10-27) · **Bilateral Play Cadence Verification & Mid-Rally Dead-Ball Ground-Landing Severing Edition**  
+> **Current Release**: `v1.4.0` (2026-10-30) · **Automated Match Segmentation & Player Lineup ReID Edition (全自动球局分段与球员重识别版)**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -52,6 +52,11 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 >      3. *Explosive Kill Action*: Receiver leaps into the air or rushes the tape, perspective court motion surging to $14.0 \le \text{kill} \le 26.0$ (`far_m >= 10.0` or `near_m >= 8.0`, `b_max <= 9.0`) with surge ratio $\ge 2.0$.
 >      4. *Immediate Dead Ball & Complete Floor Landing*: Point terminates strictly at $e_{\text{cut}} = \min(v_{\text{dur}}, t_k + 1.25\text{s})$. **Never cut at $t_k + 0.45\text{s}$** (which terminates mid-air while the bird is still airborne crossing the net). The $1.25\text{s}$ post-kill window guarantees the shuttlecock visibly plunges down, hits the floor or net, bounces, and players exhibit decisive dead-ball relaxation ($\text{post} \le 12.5$ at $t_k + 1.2\text{s}$). Total duration strictly $\approx 3.1\text{s}$ ($s_{\text{cut}} = \max(0.0, t_{\text{serve}} - 0.65\text{s})$, $e_{\text{cut}} = t_k + 1.25\text{s}$).
 >    - **Quality Over Quantity (宁缺毋滥原则)**: If a match has no genuine serve-kill, output 0 clips for that match. Under no circumstances should fake ongoing rallies or truncated airborne clips be retained.
+> 9. **Automated Match Segmentation & Lineup ReID (全自动球员识别与球局分段规范 - v1.4.0)**:
+>    - **Zero Pre-Registration Required (免底库开箱即用)**: Automatically extracts 512-dimensional normalized spatial appearance embeddings (upper-body jersey + lower-body shorts 3D color cube histograms) from serve-ready keyframes ($t_{\text{serve}} - 0.5\text{s}$).
+>    - **Permutation-Invariant Bipartite Lineup Matching (置换不变性二分图匹配)**: Computes optimal 1-to-1 lineup similarity, invariant to player quadrant rotation or court side switching (换边).
+>    - **Hysteresis Smoothing & Dual-Trigger State Machine (双重校验防误切)**: Prevents single-shot frame occlusions or players taking off warm-up jackets from causing spurious game splits.
+>    - **Directory Routing**: Partitions rallies into `第01局_实战对阵_XX拍/` with full `game_summary.txt`. Supported CLI flags: `--split-by-game` (default), `--no-split-by-game`, `--lineup-threshold 0.65`.
 
 ---
 

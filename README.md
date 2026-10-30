@@ -1,18 +1,22 @@
 # 🏸 Badminton Video Cutter (羽毛球实战视频智能精彩剪辑器)
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.3.8-blue.svg?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.4.0-blue.svg?style=flat-square" alt="Version">
   <img src="https://img.shields.io/badge/python-3.10+-brightgreen.svg?style=flat-square" alt="Python">
   <img src="https://img.shields.io/badge/ffmpeg-4K_UHD_StreamCopy-orange.svg?style=flat-square" alt="FFmpeg">
   <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License">
 </p>
 
-专为羽毛球业余/专业球友、俱乐部教练、视频创作者打造的**全自动化实战视频精彩高光提取与智能剪辑引擎**。基于**声光多模态击球感知（Acoustic-Optical Multimodal Perception）**与**物理运动学空间约束**，从数小时的 4K 60fps 原盘录像中毫秒级定位精彩回合，自动剔除捡球、走动、喝水等无效垃圾死球时间，无损直出转播级多拍集锦、接发秒杀大赏、慢动作回放与微信动态表情包！
+专为羽毛球业余/专业球友、俱乐部教练、视频创作者打造的**全自动化实战视频精彩高光提取与智能剪辑引擎**。基于**声光多模态击球感知（Acoustic-Optical Multimodal Perception）**、**物理运动学空间约束**与**轻量级球员外貌 ReID 阵容匹配**，从数小时的 4K 60fps 原盘录像中毫秒级定位精彩回合，自动按“对阵阵容”切分球局，自动剔除捡球、走动、喝水等无效垃圾死球时间，无损直出转播级多拍集锦、分局精选、接发秒杀大赏、慢动作回放与微信动态表情包！
 
 ---
 
 ## 🌟 核心功能亮点 (Key Features)
 
+- 🏆 **全自动球局分段与球员重识别 (Automated Match Segmentation - v1.4.0)**
+  - **免底库开箱即用**：无需事先录入人脸或照片，算法在每个多拍发球前静态瞬间（$-0.5\text{s}$）极速抽帧，提取球员 512 维空间外观指纹。
+  - **二分图匈牙利最佳匹配**：不受双打换位、左右半区对调或局间前后场换边影响，准确识别场上人员阵容。
+  - **分局目录结构化输出**：自动划分 `第01局_实战对阵_15拍/`、`第02局_实战对阵_18拍/` 并输出详尽的 `game_summary.txt` 战报；支持 `--split-by-game`（默认开启）与 `--no-split-by-game`。
 - 🏸 **纯多拍对攻拉锯集锦 (Multi-Shot Rallies)**
   - 自动识别激烈回合对攻，智能区分 5~15 秒【多拍激烈对攻】与 15 秒以上【超长高能拉锯】。
   - 单独输出独立精彩小视频，告别几十 GB 冗余占用，随时分享。
@@ -154,6 +158,9 @@ python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/hig
 
 查看完整的版本迭代记录：[CHANGELOG.md](CHANGELOG.md)
 
+- **v1.4.0 (2026-10-30)**：全自动球局分段与球员 ReID 重识别，基于发球准备帧 512 维空间特征与二分图最佳匹配，结构化输出 `第01局/`、`第02局/` 及比赛报告 `game_summary.txt`。
+- **v1.3.8 (2026-10-28)**：攻防连续性保护与零提前截断终结保证，0.85s 击球落地弧线全景保全，逆向末端捡球捞球清洗。
+- **v1.3.7 (2026-10-27)**：超长多拍 TOP 大集锦可选化（`--reel`），极速轻量化输出与磁盘冗余清零。
 - **v1.3.6 (2026-10-27)**：同半场连续击球终结判定与双侧攻防核验，落地即止强切断机制，彻底根除捡球走动与相邻场地杀球声串扰粘连。
 - **v1.3.5 (2026-10-27)**：接发秒杀落地即止保全（$t_k+1.25\text{s}$），后续击球严格排他窗口（3.2秒静默），发球前蓄势静音核验。
 - **v1.3.4 (2026-10-26)**：中途死球动量骤降解耦与静止场区声学串扰清洗。

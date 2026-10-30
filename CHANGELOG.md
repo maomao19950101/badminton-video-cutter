@@ -6,7 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.8] - 2026-10-28 (Current Release)
+## [1.4.0] - 2026-10-30 (Current Release)
+
+### 🚀 Major Breakthrough: Automated Match Segmentation & Player Lineup ReID (球员识别与全自动球局分段·免底库开箱即用版)
+- **Zero Pre-Registration Player ReID (免底库全自动人员重识别)**: Developed `match_segmenter.py`, extracting 512-dimensional normalized spatial appearance embeddings (upper-body jersey + lower-body shorts 3D color cube histograms) for on-court players from serve-ready keyframes.
+- **Permutation-Invariant Bipartite Lineup Matching (二分图匈牙利最佳匹配)**: Invariant to players switching left/right receiving quadrants or swapping court halves (前后场换边). Calculates exact optimal 1-to-1 matching scores ($0.0 \sim 1.0$) with zero external dependencies.
+- **Hysteresis Smoothing & Dual-Trigger State Machine (双重校验防误切状态机)**: Prevents single-shot frame occlusions or players taking off warm-up jackets from causing spurious game splits. A new game is confirmed when lineup similarity drops below threshold (default 0.65) combined with either significant inter-rally rest ($\ge 60\text{s}$) or persistent multi-shot verification.
+- **Automated Game Directory Routing & Match Summary (分局子目录归类与报告生成)**: Rallies are automatically organized into clean subdirectories (`第01局_实战对阵_15拍/`, `第02局_实战对阵_18拍/`), with a comprehensive `game_summary.txt` report.
+- **CLI Flags (`--split-by-game`, `--no-split-by-game`, `--lineup-threshold`)**: Default enabled for seamless automated match segmentation; can be easily disabled with `--no-split-by-game` for flat output.
+
+---
+
+## [1.3.8] - 2026-10-28
 
 ### 🚀 Major Breakthroughs: Zero Premature Truncation Guarantee & Full Landing Trajectory Preservation (全流程多拍完整度保全·空中提前截断根除与0.85s落地即止版)
 - **Zero Premature Cutoff Guarantee (攻防连续性保护与零提前截断终结保证)**: Fixed the critical vulnerability where active rallies with high clears, lifts, or defensive drop shots (inter-hit gap 1.4s~2.2s) were prematurely severed in mid-air because players held ready stance while the bird flew high. Enforced the **Continuous Bilateral Exchange Rule**: any continuous sequence of alternating strikes ($S_i \to S_{i+1} \to S_{i+2}$) with flight intervals $\le 2.35\text{s}$ is strictly protected from being cleaved in the middle of active play.

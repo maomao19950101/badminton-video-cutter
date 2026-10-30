@@ -35,7 +35,7 @@ from match_segmenter import (
     partition_rallies_by_game
 )
 
-__version__ = "1.3.8"
+__version__ = "1.4.0"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
