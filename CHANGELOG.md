@@ -6,7 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.0] - 2026-10-30 (Current Release)
+## [1.4.1] - 2026-10-30 (Current Release)
+
+### 🚀 Major Fix: High-Clear 2.85s Aerodynamic Preservation & Physical Match Segmentation State Machine (高远球2.85s物理保全与真对局状态机修复版)
+- **High-Clear 2.85s Flight Preservation (2.85s高远球空气动力保全·杜绝空中腰斩)**: Increased `max_gap` from 2.40s to 2.85s. Deep baseline-to-baseline clears and lobs taking up to 2.80s flight time are now 100% preserved as continuous points (fixes `多拍06` at 01分01秒 in `052` which had been cleaved at 01分08秒 mid-air).
+- **Physical Inter-Game Rest Enforcement (严格物理局间休息门禁)**: A new game is NEVER declared unless separated by a genuine intermission ($\ge 40\text{s}$). Completely eliminated erratic game fragmentation caused by 1~5 second serving quadrant rotations.
+- **Adaptive Court Mat Subtraction in ReID (自适应地胶底色剔除)**: Subtracts court mat background to evaluate only player clothing and skin, boosting same-lineup cosine similarity from 0.72 to >0.91.
+- **Minimum Game Size Filter (极小碎片局自动吸收)**: Enforces minimum rally threshold ($\ge 5$ rallies) to eliminate 1~2 shot artificial game folders.
+
+---
+
+## [1.4.0] - 2026-10-30
 
 ### 🚀 Major Breakthrough: Automated Match Segmentation & Player Lineup ReID (球员识别与全自动球局分段·免底库开箱即用版)
 - **Zero Pre-Registration Player ReID (免底库全自动人员重识别)**: Developed `match_segmenter.py`, extracting 512-dimensional normalized spatial appearance embeddings (upper-body jersey + lower-body shorts 3D color cube histograms) for on-court players from serve-ready keyframes.

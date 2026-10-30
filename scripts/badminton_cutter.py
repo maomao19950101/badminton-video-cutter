@@ -35,7 +35,7 @@ from match_segmenter import (
     partition_rallies_by_game
 )
 
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -285,29 +285,28 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
     return verified
 
 
-def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.40, min_dur=5.0, cap=None, fps=0.0):
+def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None, fps=0.0):
     """
-    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.3.6):
-    1. Initial Clustering with max_gap=2.40s:
-       Preserves high baseline-to-baseline clears without allowing dead intermissions to bridge rallies.
+    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.1):
+    1. Initial Clustering with max_gap=2.85s:
+       Preserves high baseline-to-baseline clears (flight time up to 2.80s) without premature truncation.
     2. Physical Cadence & Stroke Decoupling:
        - Multi-modal hit verification: filters out adjacent court acoustic spikes during idle/standing.
-       - Inter-strike gap >= 0.70s: checks for mid-rally dead-ball drops (walking, pickup, standing).
-       - Inter-strike gap >= 1.05s: verifies bilateral play and detects player walking/resting (our_m < 8.8).
+       - Inter-strike gap >= 1.60s: verifies bilateral play and checks for genuine active continuation.
        - Outer boundary dominance: rejects adjacent court smashes bleeding into audio (b_max >= 1.5 * our_m).
     3. Terminal Double-Tap & Pickup Pruning:
        - Eliminates player ball-scoop taps (gap_prev >= 1.05s, gap_tail <= 0.75s).
        - Eliminates trailing adjacent court bleed / idle taps (gap >= 1.65s with E < 1.8e7).
     4. Strict Zero Dead-Ball Cutoff:
        - s_cut = max(0.0, c[0][0] - 0.70s)  [Opening serve setup & backswing]
-       - e_cut = min(v_dur, c[-1][0] + 0.50s) [Terminates the moment shuttlecock lands on floor / net]
+       - e_cut = min(v_dur, c[-1][0] + 0.85s) [0.85s complete downward landing trajectory]
     """
     if not peaks:
         return []
 
     verified_peaks = peaks
 
-    # 2. Cluster with max_gap = 2.40s
+    # 2. Cluster with max_gap = 2.85s (supports deep high clears/lifts)
     clusters = []
     curr = [verified_peaks[0]]
     for p in verified_peaks[1:]:

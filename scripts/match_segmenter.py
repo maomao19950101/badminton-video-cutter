@@ -126,62 +126,61 @@ def extract_court_player_embeddings(
 ) -> List[np.ndarray]:
     """
     Extracts 512-dimensional normalized player appearance vectors.
-    Uses spatial upper-body (jersey: 256-d) and lower-body (shorts: 256-d)
-    3D joint color cube histograms with background downweighting.
+    Uses adaptive court mat background subtraction to isolate player foreground
+    and 3D color cube histograms with spatial player clustering.
     Guarantees pure NumPy execution with sub-millisecond latency.
     """
     h, w, _ = frame.shape
-    embeddings = []
+    if frame.size == 0 or np.mean(frame) < 5.0:
+        return [np.zeros(512, dtype=np.float32) for _ in range(num_players)]
 
-    # Default court quadrant bounding anchors for rear-baseline view
-    # 0: Near Left, 1: Near Right, 2: Far Left, 3: Far Right
-    quadrants = [
-        (int(h * 0.55), int(h * 0.95), int(w * 0.15), int(w * 0.50)),  # Near L
-        (int(h * 0.55), int(h * 0.95), int(w * 0.50), int(w * 0.85)),  # Near R
-        (int(h * 0.20), int(h * 0.55), int(w * 0.25), int(w * 0.50)),  # Far L
-        (int(h * 0.20), int(h * 0.55), int(w * 0.50), int(w * 0.75)),  # Far R
+    # 1. Estimate court floor color from center play zone
+    center_patch = frame[int(h * 0.55):int(h * 0.75), int(w * 0.38):int(w * 0.62)]
+    if center_patch.size > 0:
+        mat_color = np.median(center_patch, axis=(0, 1))
+    else:
+        mat_color = np.array([80.0, 150.0, 150.0], dtype=np.float32)
+
+    # 2. Foreground segmentation (pixels deviating from court mat)
+    color_diff = np.linalg.norm(frame.astype(np.float32) - mat_color, axis=-1)
+
+    # 3. Four quadrant player masks (Near Left, Near Right, Far Left, Far Right)
+    mid_x = int(w * 0.50)
+    quad_masks = [
+        # Near Left
+        (int(h * 0.52), int(h * 0.95), int(w * 0.15), mid_x, 38.0),
+        # Near Right
+        (int(h * 0.52), int(h * 0.95), mid_x, int(w * 0.85), 38.0),
+        # Far Left
+        (int(h * 0.22), int(h * 0.52), int(w * 0.25), mid_x, 32.0),
+        # Far Right
+        (int(h * 0.22), int(h * 0.52), mid_x, int(w * 0.75), 32.0),
     ]
 
-    selected_quads = quadrants[:num_players] if num_players in (1, 2, 4) else quadrants
-    for y1, y2, x1, x2 in selected_quads:
+    embeddings = []
+    selected_quads = quad_masks[:num_players] if num_players in (1, 2, 4) else quad_masks
+    for y1, y2, x1, x2, th in selected_quads:
         patch = frame[y1:y2, x1:x2, :]
-        if patch.size == 0:
+        diff_patch = color_diff[y1:y2, x1:x2]
+        fg_mask = (diff_patch > th)
+
+        fg_pixels = patch[fg_mask]
+        if len(fg_pixels) < 25:
+            # Fallback to center of patch if player color is near mat
+            fg_pixels = patch[patch.shape[0]//4: 3*patch.shape[0]//4, patch.shape[1]//4: 3*patch.shape[1]//4].reshape(-1, 3)
+
+        if len(fg_pixels) == 0:
             embeddings.append(np.zeros(512, dtype=np.float32))
             continue
 
-        mid_y = patch.shape[0] // 2
-        upper = patch[:mid_y, :, :]
-        lower = patch[mid_y:, :, :]
-
-        # Upper body (jersey): 256 dims (8 x 8 x 4)
-        qu_r = (upper[:, :, 0] // 32).astype(np.int32)
-        qu_g = (upper[:, :, 1] // 32).astype(np.int32)
-        qu_b = (upper[:, :, 2] // 64).astype(np.int32)
-        idx_u = qu_r * 32 + qu_g * 4 + qu_b
-        wu = np.ones_like(idx_u, dtype=np.float32)
-        wu[idx_u == 0] = 0.05
-        hu = np.bincount(idx_u.ravel(), weights=wu.ravel(), minlength=256).astype(np.float32)
-        norm_u = np.linalg.norm(hu)
-        if norm_u > 0:
-            hu /= norm_u
-
-        # Lower body (shorts): 256 dims (8 x 8 x 4)
-        ql_r = (lower[:, :, 0] // 32).astype(np.int32)
-        ql_g = (lower[:, :, 1] // 32).astype(np.int32)
-        ql_b = (lower[:, :, 2] // 64).astype(np.int32)
-        idx_l = ql_r * 32 + ql_g * 4 + ql_b
-        wl = np.ones_like(idx_l, dtype=np.float32)
-        wl[idx_l == 0] = 0.05
-        hl = np.bincount(idx_l.ravel(), weights=wl.ravel(), minlength=256).astype(np.float32)
-        norm_l = np.linalg.norm(hl)
-        if norm_l > 0:
-            hl /= norm_l
-
-        feat_512 = np.concatenate([hu, hl])
-        norm = np.linalg.norm(feat_512)
+        # 3D color cube histogram (8x8x8 = 512 bins)
+        q = (fg_pixels // 32).astype(np.int32)
+        idx = q[:, 0] * 64 + q[:, 1] * 8 + q[:, 2]
+        hist = np.bincount(idx, minlength=512).astype(np.float32)
+        norm = np.linalg.norm(hist)
         if norm > 0:
-            feat_512 = feat_512 / norm
-        embeddings.append(feat_512)
+            hist /= norm
+        embeddings.append(hist)
 
     return embeddings
 
@@ -190,18 +189,20 @@ def partition_rallies_by_game(
     rallies: List[dict],
     embeddings_list: List[List[np.ndarray]],
     threshold: float = 0.65,
-    rest_gap_seconds: float = 60.0
+    rest_gap_seconds: float = 40.0,
+    long_intermission_seconds: float = 90.0,
+    min_rallies_per_game: int = 5
 ) -> List[List[dict]]:
     """
-    Partitions rally list into separate games based on lineup changes
-    and temporal rest periods with 2-shot hysteresis smoothing.
+    Partitions rally list into separate games based on player lineup changes
+    and physical inter-game rest intervals.
     """
     if not rallies:
         return []
-    if len(rallies) == 1:
+    if len(rallies) <= min_rallies_per_game:
         return [rallies]
 
-    games = []
+    raw_games = []
     current_game = [rallies[0]]
     current_lineup = embeddings_list[0]
 
@@ -213,40 +214,38 @@ def partition_rallies_by_game(
         inter_gap = curr_r["start_time"] - prev_r["end_time"]
         score = compute_lineup_similarity(current_lineup, curr_lineup)
 
-        # Substitution condition
-        is_lineup_change = score < threshold
-
-        # Dual confirmation
         split_triggered = False
-        if is_lineup_change:
-            if inter_gap >= rest_gap_seconds:
-                # Strong signal: lineup altered AND significant rest pause
+        # In badminton, a game cannot end without players stopping to rest/rotate
+        if inter_gap >= rest_gap_seconds:
+            if score < threshold:
                 split_triggered = True
-            else:
-                # Short gap: check 2-shot persistence to avoid single-frame glitch
-                if k + 1 < len(rallies):
-                    next_lineup = embeddings_list[k + 1]
-                    next_score = compute_lineup_similarity(curr_lineup, next_lineup)
-                    # If current lineup persists into next rally, it is a genuine substitution
-                    if next_score >= threshold:
-                        split_triggered = True
-                else:
-                    # Last shot of match
-                    split_triggered = False
+            elif inter_gap >= long_intermission_seconds:
+                split_triggered = True
 
         if split_triggered:
-            games.append(current_game)
+            raw_games.append(current_game)
             current_game = [curr_r]
             current_lineup = curr_lineup
         else:
             current_game.append(curr_r)
-            # Adaptively update current lineup with rolling weight if same lineup
             if score >= threshold:
                 current_lineup = curr_lineup
 
     if current_game:
-        games.append(current_game)
+        raw_games.append(current_game)
 
-    return games
+    # Post-processing: merge tiny orphan clusters (< min_rallies_per_game) into neighbors
+    merged_games = []
+    for g in raw_games:
+        if not merged_games:
+            merged_games.append(g)
+        elif len(g) < min_rallies_per_game:
+            merged_games[-1].extend(g)
+        elif len(merged_games[-1]) < min_rallies_per_game:
+            merged_games[-1].extend(g)
+        else:
+            merged_games.append(g)
+
+    return merged_games
 
 
