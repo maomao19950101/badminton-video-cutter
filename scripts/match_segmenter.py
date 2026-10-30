@@ -185,3 +185,68 @@ def extract_court_player_embeddings(
 
     return embeddings
 
+
+def partition_rallies_by_game(
+    rallies: List[dict],
+    embeddings_list: List[List[np.ndarray]],
+    threshold: float = 0.65,
+    rest_gap_seconds: float = 60.0
+) -> List[List[dict]]:
+    """
+    Partitions rally list into separate games based on lineup changes
+    and temporal rest periods with 2-shot hysteresis smoothing.
+    """
+    if not rallies:
+        return []
+    if len(rallies) == 1:
+        return [rallies]
+
+    games = []
+    current_game = [rallies[0]]
+    current_lineup = embeddings_list[0]
+
+    for k in range(1, len(rallies)):
+        prev_r = rallies[k - 1]
+        curr_r = rallies[k]
+        curr_lineup = embeddings_list[k]
+
+        inter_gap = curr_r["start_time"] - prev_r["end_time"]
+        score = compute_lineup_similarity(current_lineup, curr_lineup)
+
+        # Substitution condition
+        is_lineup_change = score < threshold
+
+        # Dual confirmation
+        split_triggered = False
+        if is_lineup_change:
+            if inter_gap >= rest_gap_seconds:
+                # Strong signal: lineup altered AND significant rest pause
+                split_triggered = True
+            else:
+                # Short gap: check 2-shot persistence to avoid single-frame glitch
+                if k + 1 < len(rallies):
+                    next_lineup = embeddings_list[k + 1]
+                    next_score = compute_lineup_similarity(curr_lineup, next_lineup)
+                    # If current lineup persists into next rally, it is a genuine substitution
+                    if next_score >= threshold:
+                        split_triggered = True
+                else:
+                    # Last shot of match
+                    split_triggered = False
+
+        if split_triggered:
+            games.append(current_game)
+            current_game = [curr_r]
+            current_lineup = curr_lineup
+        else:
+            current_game.append(curr_r)
+            # Adaptively update current lineup with rolling weight if same lineup
+            if score >= threshold:
+                current_lineup = curr_lineup
+
+    if current_game:
+        games.append(current_game)
+
+    return games
+
+
