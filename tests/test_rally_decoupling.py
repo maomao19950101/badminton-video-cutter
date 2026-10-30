@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for Badminton Rally Decoupling & Dead-Ball Separation (v1.4.3).
+Unit tests for Badminton Rally Decoupling & Dead-Ball Separation (v1.4.4).
 """
 
 import unittest
@@ -92,6 +92,63 @@ class TestRallyDecoupling(unittest.TestCase):
         self.assertEqual(rallies[0]["hits"], 6)
         self.assertAlmostEqual(rallies[0]["first_hit"], 100.0, places=2)
         self.assertAlmostEqual(rallies[0]["last_hit"], 107.5, places=2)
+
+    def test_preserve_smash_defense_and_counter_stroke(self):
+        """
+        Tests that an active rally where a smash is returned by a defender
+        and followed by a counter-stroke is preserved intact without premature cutoff.
+        Simulated sequence representing Rally 67 from Match 2:
+        - 1193.68 (E=6.07e6): Serve
+        - 1195.46 (E=3.35e7): Return of serve (gap=1.78s)
+        - 1195.87 (E=1.04e7): Drive (gap=0.41s)
+        - 1197.31 (E=6.62e6): Drop (gap=1.44s)
+        - 1198.75 (E=8.64e6): Lift (gap=1.44s)
+        - 1199.16 (E=1.82e7): Drive (gap=0.41s)
+        - 1199.56 (E=5.33e7): Smash (gap=0.40s)
+        - 1200.71 (E=8.24e6): Defensive lift return (gap=1.15s)
+        - 1201.73 (E=6.09e6): Counter-kill / stroke (gap=1.02s)
+        """
+        peaks = [
+            (1193.68, 6.07e6),
+            (1195.46, 3.35e7),
+            (1195.87, 1.04e7),
+            (1197.31, 6.62e6),
+            (1198.75, 8.64e6),
+            (1199.16, 1.82e7),
+            (1199.56, 5.33e7),
+            (1200.71, 8.24e6),
+            (1201.73, 6.09e6),
+        ]
+        v_dur = 1812.0
+        rallies = extract_multi_shot_rallies(peaks, v_dur)
+        self.assertEqual(len(rallies), 1, "Rally 67 must not be truncated or cleaved")
+        r = rallies[0]
+        self.assertEqual(r["hits"], 9, "Must retain all 9 shots from serve to counter-kill")
+        self.assertAlmostEqual(r["first_hit"], 1193.68, places=2)
+        self.assertAlmostEqual(r["last_hit"], 1201.73, places=2)
+        self.assertTrue(r["s_cut"] <= 1193.68)
+        self.assertTrue(r["e_cut"] >= 1201.73 + 0.85)
+
+    def test_preserve_opening_serve_with_return_flight(self):
+        """
+        Tests that an opening serve with flight time up to 2.10s
+        is not falsely pruned as a leading dead-ball tap when followed
+        by an active attacking return.
+        """
+        peaks = [
+            (50.00, 5.5e6), # Soft high serve
+            (51.85, 2.8e7), # Attack return of serve (gap=1.85s)
+            (52.25, 1.2e7), # Drive return
+            (53.50, 1.6e7), # Lift / drop
+            (54.80, 3.5e7), # Smash winner
+        ]
+        v_dur = 100.0
+        rallies = extract_multi_shot_rallies(peaks, v_dur)
+        self.assertEqual(len(rallies), 1)
+        r = rallies[0]
+        self.assertEqual(r["hits"], 5)
+        self.assertAlmostEqual(r["first_hit"], 50.00, places=2)
+        self.assertAlmostEqual(r["last_hit"], 54.80, places=2)
 
 
 if __name__ == "__main__":

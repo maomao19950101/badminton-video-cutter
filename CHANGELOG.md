@@ -6,7 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.3] - 2026-10-30 (Current Release)
+## [1.4.4] - 2026-10-30 (Current Release)
+
+### 🚀 Major Fix: Smash Defense Continuation & Opening Serve Aerodynamic Protection (杀球防守反击全链路保全与发球高远起手保护版)
+- **Smash Defense & Counter-Stroke Preservation (杀球防守起球与反击连贯性保全·杜绝扣杀空中截断)**:
+  - Fixed premature severance in `extract_multi_shot_rallies` where Rule 1 falsely cleaved the rally at the smash ($c[i]$) because the opponent's defensive lift return ($c[i+1]$) had soft acoustic energy ($E < 2.0\times 10^7$) and $gap \ge 0.70\text{s}$.
+  - Strictly enforced physical continuation semantics: A smash at $c[i]$ is NEVER treated as a terminal winner drop if followed by a defensive return and subsequent counter-stroke ($0.35\text{s} \le c[i+2][0] - c[i+1][0] \le 2.35\text{s}$).
+  - Cluster tail preservation: Guarantees that $c[i+1]$ is never cleaved when it is the final stroke of the cluster ($i+1 == \text{len}(c)-1$), ensuring that defensive returns and final ground landings are 100% captured until the shuttle touches the court mat ($t_{\text{last}} + 0.85\text{s}$).
+  - Completely resolved `多拍67` in Match 2 (`051`): extended from premature 5.5s (19分54秒至20分00秒) to complete 9.6s (19分52秒至20分02秒, 9 shots), fully capturing the serve, smash, diving defense return, counter-stroke, and final floor landing.
+- **High / Flick Opening Serve Protection (高远发球与偷后场起手保全)**:
+  - In badminton, high serves and flick serves commonly fly for $1.60\text{s} \sim 2.10\text{s}$ before being struck by the receiver, with soft initial serve sound ($E \approx 4\times 10^6 \sim 7.5\times 10^6$).
+  - Eliminated the naive leading tap pruning condition: an opening hit with $gap \le 2.20\text{s}$ followed by an active return ($E \ge 1.2\times 10^7$ or bilateral continuation) is strictly preserved as the genuine opening serve ($s_{\text{cut}} = t_{\text{serve}} - 0.75\text{s}$).
+- **Inter-Point Decoupling Consistency (全对局跨分死球隔离零退化)**:
+  - Preserved complete decoupling for inter-point dead-ball floor scoop taps and multi-point gluing (Rally 81 in Match 2 remains cleanly split into 2 independent points).
+
+---
+
+## [1.4.3] - 2026-10-30
 
 ### 🚀 Major Fix: Inter-Point Dead-Ball Decoupling & Double-Point Gluing Elimination (跨分死球捡球解耦·双分粘连彻底断开版)
 - **Post-Smash Winner Drop Decoupling (进攻制胜分与死球落地强切断机制)**: Introduced automatic detection of terminal attack strokes ($E \ge 4.5\times 10^7$ within the last 2 shots). When followed by defensive block/ground contact and subsequent non-attack floor taps ($gap \ge 0.70\text{s}, E < 2.0\times 10^7$), cuts cleanly at $t_{\text{last}} + 0.85\text{s}$ with zero trailing dead-ball pauses.

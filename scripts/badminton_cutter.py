@@ -312,12 +312,14 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
 
 def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None, fps=0.0, vpath=None):
     """
-    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.3):
+    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.4):
     1. Initial Clustering with max_gap=2.85s:
        Preserves high baseline-to-baseline clears (flight time up to 2.80s) without premature truncation.
     2. Physical Cadence & Stroke Decoupling:
-       - Post-Smash Winner Drop: If a smash (E >= 4.5e7) within last 2 shots is followed by block/ground contact
-         and gap >= 0.70s with low energy (E < 2.0e7), decouples immediately at landing.
+       - Post-Smash Winner Drop & Defense Continuation: Decouples post-smash dead-ball floor taps
+         only when a smash occurred prior to c[i] and is followed by dead-ball intermission taps.
+         Guarantees that a smash followed by defensive return (and counter-stroke) is preserved intact
+         until true rally completion.
        - Inter-Point Break / Pre-Serve Gap: If gap >= 2.10s preceded by weak floor tap or followed by a serve return,
          severs the intermission cleanly before the new serve.
        - Single dead-ball tap without continuation: prunes isolated floor scoops.
@@ -325,7 +327,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
     3. Rally Quality & Floor Tap Rejection:
        - Every valid rally must feature at least one active attacking/clearing stroke (max E >= 1.8e7),
          rejecting pure floor-pickup tap clusters.
-       - Prunes leading/trailing dead-ball taps (gap >= 1.70s with E < 8.0e6).
+       - Prunes leading/trailing dead-ball taps, while protecting genuine opening serves followed by active returns.
     4. Strict Zero Dead-Ball Cutoff:
        - s_cut = max(0.0, c[0][0] - 0.75s)  [Opening serve setup & backswing]
        - e_cut = min(v_dur, c[-1][0] + 0.85s) [0.85s complete downward landing trajectory]
@@ -359,11 +361,17 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                 is_break = False
 
                 # Rule 1: Post-Smash Winner Drop (进攻制胜分与死球落地强切断)
-                # A smash (E >= 4.5e7) within the last 2 shots (e.g. smash -> block -> ground),
-                # followed by gap >= 0.70s with low energy (E < 2.0e7):
-                had_smash = any(c[k][1] >= 4.5e7 for k in range(max(0, i - 2), i + 1))
-                if had_smash and gap >= 0.70 and c[i + 1][1] < 2.0e7:
-                    is_break = True
+                # A smash occurred prior to c[i] (e.g. c[i-1] or c[i-2] was smash E >= 4.5e7,
+                # so c[i] is the defensive block or ground landing).
+                # NEVER break at c[i] if c[i] is the smash itself (flight time to defender/floor is 0.4s~1.5s).
+                # NEVER break if c[i+1] is the final stroke of the cluster (preserve final return/landing).
+                had_prior_smash = any(c[k][1] >= 4.5e7 for k in range(max(0, i - 2), i))
+                if had_prior_smash and gap >= 0.70 and c[i + 1][1] < 2.0e7 and (i + 1 < len(c) - 1):
+                    # Check if subsequent sequence contains a genuine attack/serve or only floor taps
+                    has_active_play_ahead = any(c[k][1] >= 1.8e7 for k in range(i + 1, min(len(c), i + 6)))
+                    has_serve_ahead = any((c[k+1][0] - c[k][0] >= 2.00) for k in range(i + 1, len(c) - 1))
+                    if not has_active_play_ahead or has_serve_ahead:
+                        is_break = True
 
                 # Rule 2: Inter-point break / pre-serve gap
                 elif gap >= 2.10:
@@ -413,7 +421,12 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                 c = c[:-1]
 
         # Prune leading dead-ball pickup taps if gap >= 1.70s
+        # BUT protect genuine opening serve: if gap <= 2.20s and c[1] is an active return or followed by active rally
         while len(c) >= 3 and (c[1][0] - c[0][0]) >= 1.70 and c[0][1] < 8.0e6:
+            gap_lead = c[1][0] - c[0][0]
+            is_serve_return = (gap_lead <= 2.20 and (c[1][1] >= 1.2e7 or (len(c) >= 3 and 0.35 <= c[2][0] - c[1][0] <= 2.0)))
+            if is_serve_return:
+                break
             c = c[1:]
 
         if len(c) < 3:
