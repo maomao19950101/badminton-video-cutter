@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.1] - 2026-10-30 (Current Release)
+## [1.4.2] - 2026-10-30 (Current Release)
+
+### 🚀 Major Fix: Terminal Return Preservation & Full Floor Landing Guarantee (终局击球保全与落地砸地即止保全版)
+- **Terminal Return Cleaving Fix (终结击球排他断流修复·杜绝空中截断)**: Fixed critical logic flaw in `extract_multi_shot_rallies` where a cluster's final return ($c[i+1]$) following a high clear/lift ($gap \ge 1.60\text{s}$) was falsely discarded because no subsequent stroke ($i+2$) existed. The engine erroneously treated the final shot as a "dead-ball tap", cleaving the point at the penultimate stroke in mid-air (causing `多拍70` in `050` at 27分39秒 to cut off at 27分48秒 before the shuttle landed).
+- **Decisive Floor Landing Window (0.85s落地与弹跳全景保全)**: Guarantees that the final return is 100% retained and terminates strictly at $c_{\text{last}} + 0.85\text{s}$, completely capturing the shuttlecock crossing the net, plunging down, hitting the court mat, and players acknowledging the score.
+
+---
+
+## [1.4.1] - 2026-10-30
 
 ### 🚀 Major Fix: High-Clear 2.85s Aerodynamic Preservation & Physical Match Segmentation State Machine (高远球2.85s物理保全与真对局状态机修复版)
 - **High-Clear 2.85s Flight Preservation (2.85s高远球空气动力保全·杜绝空中腰斩)**: Increased `max_gap` from 2.40s to 2.85s. Deep baseline-to-baseline clears and lobs taking up to 2.80s flight time are now 100% preserved as continuous points (fixes `多拍06` at 01分01秒 in `052` which had been cleaved at 01分08秒 mid-air).

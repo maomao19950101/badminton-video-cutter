@@ -35,7 +35,7 @@ from match_segmenter import (
     partition_rallies_by_game
 )
 
-__version__ = "1.4.1"
+__version__ = "1.4.2"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -337,6 +337,10 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                         g_next = c[i + 2][0] - c[i + 1][0]
                         if 0.35 <= g_next <= 2.35:
                             has_continuation = True
+                    else:
+                        # i + 1 is the terminal hit of the cluster.
+                        # Do NOT cleave the terminal return of an active point!
+                        has_continuation = True
 
                     if not has_continuation:
                         # Isolated pickup tap or floor scrape without opponent return
