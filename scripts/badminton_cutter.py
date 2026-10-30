@@ -783,14 +783,20 @@ def main():
 
                 if args.split_by_game and len(valid_rallies) > 1:
                     print(f"  🏸 Analyzing player lineup ReID for {len(valid_rallies)} rallies...")
-                    embeddings_list = []
-                    for vr in valid_rallies:
+                    def _extract_one_emb(task):
+                        idx, s_cut = task
                         try:
-                            frame = extract_serve_keyframe(vpath, vr["s_cut"], ffmpeg_bin=args.ffmpeg)
+                            frame = extract_serve_keyframe(vpath, s_cut, ffmpeg_bin=args.ffmpeg)
                             embs = extract_court_player_embeddings(frame, num_players=4)
                         except Exception:
                             embs = [np.zeros(512, dtype=np.float32) for _ in range(4)]
-                        embeddings_list.append(embs)
+                        return idx, embs
+
+                    tasks = [(i, vr["s_cut"]) for i, vr in enumerate(valid_rallies)]
+                    with ThreadPoolExecutor(max_workers=8) as executor:
+                        emb_results = list(executor.map(_extract_one_emb, tasks))
+                    emb_results.sort(key=lambda x: x[0])
+                    embeddings_list = [r[1] for r in emb_results]
 
                     partition_input = [
                         {"index": i, "start_time": vr["s_cut"], "end_time": vr["e_cut"], "data": vr}
