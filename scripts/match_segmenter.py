@@ -211,7 +211,9 @@ def partition_rallies_by_game(
         curr_r = rallies[k]
         curr_lineup = embeddings_list[k]
 
-        inter_gap = curr_r["start_time"] - prev_r["end_time"]
+        curr_start = curr_r.get("start_time", curr_r.get("s_cut", 0.0))
+        prev_end = prev_r.get("end_time", prev_r.get("e_cut", 0.0))
+        inter_gap = curr_start - prev_end
         score = compute_lineup_similarity(current_lineup, curr_lineup)
 
         split_triggered = False

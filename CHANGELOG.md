@@ -6,7 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.2] - 2026-10-30 (Current Release)
+## [1.4.3] - 2026-10-30 (Current Release)
+
+### 🚀 Major Fix: Inter-Point Dead-Ball Decoupling & Double-Point Gluing Elimination (跨分死球捡球解耦·双分粘连彻底断开版)
+- **Post-Smash Winner Drop Decoupling (进攻制胜分与死球落地强切断机制)**: Introduced automatic detection of terminal attack strokes ($E \ge 4.5\times 10^7$ within the last 2 shots). When followed by defensive block/ground contact and subsequent non-attack floor taps ($gap \ge 0.70\text{s}, E < 2.0\times 10^7$), cuts cleanly at $t_{\text{last}} + 0.85\text{s}$ with zero trailing dead-ball pauses.
+- **Pre-Serve Pause Decoupling (发球前置静止与换分强切断)**: Implemented serve signature detection ($gap \ge 2.10\text{s}$ followed by bilateral serve return within $0.60\text{s} \sim 2.20\text{s}$). Decouples intermission walk/retrieval strictly at $t_{\text{serve}} - 0.75\text{s}$, completely separating previous rally finish from new serve.
+- **Racket Floor Scoop Double-Tap Rejection (双击挑球杂音过滤与全段质检)**: Physical laws of badminton dictate that bilateral exchanges across the net in $< 0.60\text{s}$ strictly require a high-velocity smash ($E \ge 3.0\times 10^7$). Filters out floor scoops and frame scrapes, and rejects candidate clusters devoid of genuine attacking or clearing strokes ($\max E < 1.8\times 10^7$).
+- **Self-Contained Optical Motion Engine (独立于OpenCV的FFmpeg管道降级采样)**: Enhanced `sample_instant_motion` with an automated pure-Python + FFmpeg rawvideo pipe fallback, ensuring court motion analysis and camera stability checks execute reliably even when `cv2` is missing.
+- **Verified against Target Footage**: Completely splits `多拍81` in Match 2 into `多拍95` (29分26秒至29分35秒, 9.5s, 10 hits) and `多拍96` (29分41秒至29分47秒, 5.9s, 4 hits), eliminating the 6-second dead-ball walking intermission.
+
+---
+
+## [1.4.2] - 2026-10-30
 
 ### 🚀 Major Fix: Terminal Return Preservation & Full Floor Landing Guarantee (终局击球保全与落地砸地即止保全版)
 - **Terminal Return Cleaving Fix (终结击球排他断流修复·杜绝空中截断)**: Fixed critical logic flaw in `extract_multi_shot_rallies` where a cluster's final return ($c[i+1]$) following a high clear/lift ($gap \ge 1.60\text{s}$) was falsely discarded because no subsequent stroke ($i+2$) existed. The engine erroneously treated the final shot as a "dead-ball tap", cleaving the point at the penultimate stroke in mid-air (causing `多拍70` in `050` at 27分39秒 to cut off at 27分48秒 before the shuttle landed).

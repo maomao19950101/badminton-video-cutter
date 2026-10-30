@@ -35,7 +35,7 @@ from match_segmenter import (
     partition_rallies_by_game
 )
 
-__version__ = "1.4.2"
+__version__ = "1.4.3"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -135,29 +135,54 @@ def compute_perspective_court_motion(d):
 _MOTION_CACHE = {}
 
 
-def sample_instant_motion(cap, fps, t_sec):
+def sample_instant_motion(cap, fps, t_sec, vpath=None, ffmpeg_bin=DEFAULT_FFMPEG):
     """
-    Measures instantaneous 4-frame (~0.133s) optical motion diff at timestamp t_sec
+    Measures instantaneous optical motion diff at timestamp t_sec
     using downscaled 640x360 grayscale frames and the Perspective Trapezoid mask.
-    Features an in-memory sub-second resolution cache to eliminate duplicate 4K seeks.
+    Features an in-memory sub-second resolution cache to eliminate duplicate seeks.
+    Supports both OpenCV VideoCapture and pure FFmpeg pipe fallback when cv2 is unavailable.
     """
-    if cap is None or fps <= 0:
+    if t_sec < 0:
         return None
     cache_key = round(t_sec, 1)
     if cache_key in _MOTION_CACHE:
         return _MOTION_CACHE[cache_key]
-    cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, int(t_sec * fps)))
-    ret1, f1 = cap.read()
-    for _ in range(3):
-        cap.grab()
-    ret2, f2 = cap.read()
-    if not (ret1 and ret2):
-        return None
-    g1 = cv2.cvtColor(cv2.resize(f1, (640, 360)), cv2.COLOR_BGR2GRAY)
-    g2 = cv2.cvtColor(cv2.resize(f2, (640, 360)), cv2.COLOR_BGR2GRAY)
-    res = compute_perspective_court_motion(cv2.absdiff(g1, g2))
-    _MOTION_CACHE[cache_key] = res
-    return res
+
+    if cap is not None and fps > 0 and HAS_CV2:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, int(t_sec * fps)))
+        ret1, f1 = cap.read()
+        for _ in range(3):
+            cap.grab()
+        ret2, f2 = cap.read()
+        if ret1 and ret2:
+            g1 = cv2.cvtColor(cv2.resize(f1, (640, 360)), cv2.COLOR_BGR2GRAY)
+            g2 = cv2.cvtColor(cv2.resize(f2, (640, 360)), cv2.COLOR_BGR2GRAY)
+            res = compute_perspective_court_motion(cv2.absdiff(g1, g2))
+            _MOTION_CACHE[cache_key] = res
+            return res
+
+    if vpath and os.path.exists(vpath):
+        cmd = [
+            ffmpeg_bin,
+            "-ss", f"{max(0.0, t_sec):.2f}",
+            "-i", vpath,
+            "-t", "0.2",
+            "-vf", "fps=10,scale=640:360",
+            "-f", "rawvideo",
+            "-pix_fmt", "gray",
+            "-"
+        ]
+        res_proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        if len(res_proc.stdout) >= 640 * 360 * 2:
+            buf = np.frombuffer(res_proc.stdout, dtype=np.uint8)
+            f1 = buf[:640 * 360].reshape((360, 640)).astype(np.float32)
+            f2 = buf[640 * 360:640 * 360 * 2].reshape((360, 640)).astype(np.float32)
+            diff = np.abs(f2 - f1)
+            res = compute_perspective_court_motion(diff)
+            _MOTION_CACHE[cache_key] = res
+            return res
+
+    return None
 
 
 def fast_camera_match_window(cap, fps, dur):
@@ -285,20 +310,24 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
     return verified
 
 
-def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None, fps=0.0):
+def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None, fps=0.0, vpath=None):
     """
-    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.1):
+    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.3):
     1. Initial Clustering with max_gap=2.85s:
        Preserves high baseline-to-baseline clears (flight time up to 2.80s) without premature truncation.
     2. Physical Cadence & Stroke Decoupling:
-       - Multi-modal hit verification: filters out adjacent court acoustic spikes during idle/standing.
-       - Inter-strike gap >= 1.60s: verifies bilateral play and checks for genuine active continuation.
-       - Outer boundary dominance: rejects adjacent court smashes bleeding into audio (b_max >= 1.5 * our_m).
-    3. Terminal Double-Tap & Pickup Pruning:
-       - Eliminates player ball-scoop taps (gap_prev >= 1.05s, gap_tail <= 0.75s).
-       - Eliminates trailing adjacent court bleed / idle taps (gap >= 1.65s with E < 1.8e7).
+       - Post-Smash Winner Drop: If a smash (E >= 4.5e7) within last 2 shots is followed by block/ground contact
+         and gap >= 0.70s with low energy (E < 2.0e7), decouples immediately at landing.
+       - Inter-Point Break / Pre-Serve Gap: If gap >= 2.10s preceded by weak floor tap or followed by a serve return,
+         severs the intermission cleanly before the new serve.
+       - Single dead-ball tap without continuation: prunes isolated floor scoops.
+       - Motion verification: verifies stillness/freeze at breaks via OpenCV or FFmpeg fallback.
+    3. Rally Quality & Floor Tap Rejection:
+       - Every valid rally must feature at least one active attacking/clearing stroke (max E >= 1.8e7),
+         rejecting pure floor-pickup tap clusters.
+       - Prunes leading/trailing dead-ball taps (gap >= 1.70s with E < 8.0e6).
     4. Strict Zero Dead-Ball Cutoff:
-       - s_cut = max(0.0, c[0][0] - 0.70s)  [Opening serve setup & backswing]
+       - s_cut = max(0.0, c[0][0] - 0.75s)  [Opening serve setup & backswing]
        - e_cut = min(v_dur, c[-1][0] + 0.85s) [0.85s complete downward landing trajectory]
     """
     if not peaks:
@@ -306,7 +335,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
 
     verified_peaks = peaks
 
-    # 2. Cluster with max_gap = 2.85s (supports deep high clears/lifts)
+    # 1. Cluster with max_gap = 2.85s (supports deep high clears/lifts)
     clusters = []
     curr = [verified_peaks[0]]
     for p in verified_peaks[1:]:
@@ -318,7 +347,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
     if curr:
         clusters.append(curr)
 
-    # 3. Decouple inter-point walking intermissions and adjacent court bleed
+    # 2. Decouple inter-point walking intermissions, deadball drops, and serves
     decoupled = []
     for c in clusters:
         sub = []
@@ -329,29 +358,42 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                 gap = c[i + 1][0] - c[i][0]
                 is_break = False
 
-                # Only decouple if there is a real break between points:
-                # In active play, shots alternate across the net and have immediate continuation.
-                if gap >= 1.60:
+                # Rule 1: Post-Smash Winner Drop (进攻制胜分与死球落地强切断)
+                # A smash (E >= 4.5e7) within the last 2 shots (e.g. smash -> block -> ground),
+                # followed by gap >= 0.70s with low energy (E < 2.0e7):
+                had_smash = any(c[k][1] >= 4.5e7 for k in range(max(0, i - 2), i + 1))
+                if had_smash and gap >= 0.70 and c[i + 1][1] < 2.0e7:
+                    is_break = True
+
+                # Rule 2: Inter-point break / pre-serve gap
+                elif gap >= 2.10:
+                    if c[i][1] < 7.0e6 or (i + 2 < len(c) and 0.60 <= c[i + 2][0] - c[i + 1][0] <= 2.20 and c[i + 1][1] < 1.5e7):
+                        is_break = True
+                    elif cap is not None or vpath is not None:
+                        m = sample_instant_motion(cap, fps, c[i][0] + 0.5 * gap, vpath=vpath)
+                        if m is not None:
+                            our_m, far_m, near_m, top_d, b_max = m
+                            if our_m < 3.2 or (b_max >= 15.0 and b_max >= 2.0 * our_m):
+                                is_break = True
+
+                # Rule 3: Single dead-ball tap without continuation
+                elif gap >= 1.60:
                     has_continuation = False
                     if i + 2 < len(c):
                         g_next = c[i + 2][0] - c[i + 1][0]
                         if 0.35 <= g_next <= 2.35:
                             has_continuation = True
                     else:
-                        # i + 1 is the terminal hit of the cluster.
-                        # Do NOT cleave the terminal return of an active point!
                         has_continuation = True
 
                     if not has_continuation:
-                        # Isolated pickup tap or floor scrape without opponent return
                         if c[i + 1][1] < 1.5e7:
                             is_break = True
-                    elif gap >= 2.00 and cap is not None and fps > 0:
-                        # Long break between rallies: verify if players paused or walked
-                        m = sample_instant_motion(cap, fps, c[i][0] + 0.5 * gap)
+                    elif gap >= 2.00 and (cap is not None or vpath is not None):
+                        m = sample_instant_motion(cap, fps, c[i][0] + 0.5 * gap, vpath=vpath)
                         if m is not None:
                             our_m, far_m, near_m, top_d, b_max = m
-                            if our_m < 5.0 or (b_max >= 15.0 and b_max >= 2.0 * our_m):
+                            if our_m < 3.2 or (b_max >= 15.0 and b_max >= 2.0 * our_m):
                                 is_break = True
 
                 if is_break:
@@ -361,19 +403,28 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
         if sub:
             decoupled.append(sub)
 
-    # 4. Prune single isolated tail pickup tap and calculate exact landing e_cut
+    # 3. Rally validation & pruning
     rallies = []
     for c in decoupled:
+        # Prune isolated tail pickup tap if gap >= 2.0s
         if len(c) >= 3:
             times = [p[0] for p in c]
-            if (times[-1] - times[-2]) >= 2.05 and c[-1][1] < 8.0e6:
+            if (times[-1] - times[-2]) >= 2.00 and c[-1][1] < 8.0e6:
                 c = c[:-1]
+
+        # Prune leading dead-ball pickup taps if gap >= 1.70s
+        while len(c) >= 3 and (c[1][0] - c[0][0]) >= 1.70 and c[0][1] < 8.0e6:
+            c = c[1:]
 
         if len(c) < 3:
             continue
 
+        # Every genuine badminton rally must contain at least one real stroke (max E >= 1.8e7)
+        max_energy = max(p[1] for p in c)
+        if max_energy < 1.8e7:
+            continue
+
         s_cut = max(0.0, c[0][0] - 0.75)
-        # Full landing guarantee: 0.85s after the final strike (0.65s for fast smash)
         tail_energy = c[-1][1]
         landing_buf = 0.65 if tail_energy >= 2.0e7 else 0.85
         e_cut = min(v_dur, c[-1][0] + landing_buf)
@@ -747,7 +798,7 @@ def main():
             print(f"  📷 机位实战时间窗: {stable_start:.1f}s ~ {unstable_end:.1f}s (排除开机固定/散场关机杂音 {filtered_out} 处，保留实战击球 {len(peaks)} 次)")
 
             if args.mode in ["duopai", "all"]:
-                rallies = extract_multi_shot_rallies(peaks, v_dur, cap=cap, fps=fps)
+                rallies = extract_multi_shot_rallies(peaks, v_dur, cap=cap, fps=fps, vpath=vpath)
                 print(f"  🏸 Found {len(rallies)} raw candidate rallies")
 
                 valid_rallies = []
@@ -922,7 +973,7 @@ def main():
             if args.mode in ["serve_kill", "all"]:
                 # Ensure multi-shot rallies are present for gap boundary benchmarking
                 if "rallies" not in locals():
-                    rallies = extract_multi_shot_rallies(peaks, v_dur, cap=cap, fps=fps)
+                    rallies = extract_multi_shot_rallies(peaks, v_dur, cap=cap, fps=fps, vpath=vpath)
                 kills = extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur)
                 print(f"  ⚡ Found {len(kills)} verified serve-and-kill moments")
                 kill_dir = os.path.join(match_dir, "接发秒杀一拍定死")
