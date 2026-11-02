@@ -35,7 +35,7 @@ from match_segmenter import (
     partition_rallies_by_game
 )
 
-__version__ = "1.4.8"
+__version__ = "1.5.0"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -839,6 +839,9 @@ def main():
     parser.add_argument("--no-split-by-game", dest="split_by_game", action="store_false", help="Disable game grouping and output all rallies in a flat directory")
     parser.add_argument("--min-hits", type=int, default=5, help="Minimum verified stroke count for multi-shot rallies (default: 5)")
     parser.add_argument("--lineup-threshold", type=float, default=0.65, help="Similarity threshold for detecting player lineup substitution (default: 0.65)")
+    parser.add_argument("--rest-gap", type=float, default=22.0, help="Minimum rest gap in seconds for detecting player rotation (default: 22.0)")
+    parser.add_argument("--long-intermission", type=float, default=45.0, help="Physical rest intermission threshold in seconds to trigger game split (default: 45.0)")
+    parser.add_argument("--min-rallies-per-game", type=int, default=8, help="Minimum rallies required for a distinct game before merging (default: 8)")
     parser.add_argument("--ffmpeg", default=DEFAULT_FFMPEG, help="Path to ffmpeg executable")
     args = parser.parse_args()
 
@@ -996,7 +999,9 @@ def main():
                         partition_input,
                         embeddings_list,
                         threshold=args.lineup_threshold,
-                        rest_gap_seconds=60.0
+                        rest_gap_seconds=args.rest_gap,
+                        long_intermission_seconds=args.long_intermission,
+                        min_rallies_per_game=args.min_rallies_per_game
                     )
                     print(f"  🏆 Identified {len(game_groups)} distinct game(s) in match based on player lineups.")
 

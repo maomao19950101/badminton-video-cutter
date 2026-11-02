@@ -58,5 +58,49 @@ class TestMatchSegmentationStateMachine(unittest.TestCase):
         self.assertEqual(len(games), 1)
         self.assertEqual(len(games[0]), 7)
 
+    def test_recreational_intermission_with_short_rest(self):
+        # Amateur club match: 25s rest interval with 4 new players rotating on
+        team_a = [np.eye(8)[i] for i in range(4)]
+        team_b = [np.eye(8)[i + 4] for i in range(4)]
+
+        rallies_g1 = [
+            {"index": i, "start_time": i * 25.0, "end_time": i * 25.0 + 12.0}
+            for i in range(6)
+        ]
+        # 25-second inter-game gap (137s start vs 112s end = 25s gap)
+        last_end = rallies_g1[-1]["end_time"]
+        rallies_g2 = [
+            {"index": i + 6, "start_time": last_end + 25.0 + i * 25.0, "end_time": last_end + 25.0 + i * 25.0 + 12.0}
+            for i in range(6)
+        ]
+        rallies = rallies_g1 + rallies_g2
+        embeddings = [team_a] * 6 + [team_b] * 6
+
+        # With default settings (rest_gap_seconds=22.0), should cleanly split into 2 games
+        games = partition_rallies_by_game(rallies, embeddings)
+        self.assertEqual(len(games), 2)
+        self.assertEqual(len(games[0]), 6)
+        self.assertEqual(len(games[1]), 6)
+
+    def test_long_intermission_splits_even_with_returning_lineup(self):
+        # Same players play, rest for 50s (> long_intermission_seconds=45.0s), and play Game 2
+        team_a = [np.eye(4)[i] for i in range(4)]
+        rallies_g1 = [
+            {"index": i, "start_time": i * 25.0, "end_time": i * 25.0 + 12.0}
+            for i in range(6)
+        ]
+        last_end = rallies_g1[-1]["end_time"]
+        rallies_g2 = [
+            {"index": i + 6, "start_time": last_end + 50.0 + i * 25.0, "end_time": last_end + 50.0 + i * 25.0 + 12.0}
+            for i in range(6)
+        ]
+        rallies = rallies_g1 + rallies_g2
+        embeddings = [team_a] * 12
+
+        games = partition_rallies_by_game(rallies, embeddings)
+        self.assertEqual(len(games), 2)
+        self.assertEqual(len(games[0]), 6)
+        self.assertEqual(len(games[1]), 6)
+
 if __name__ == "__main__":
     unittest.main()

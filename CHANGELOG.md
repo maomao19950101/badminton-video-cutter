@@ -6,7 +6,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.9] - 2026-11-02 (Current Release)
+## [1.5.0] - 2026-11-02 (Current Release)
+
+### 🚀 Major Feature & Architecture Overhaul: Calibrated Perspective Torso ReID & Amateur Match Game Segmentation (透视校准躯干重识别与业余全自动分局版)
+- **Resolved Root Cause of 1-Game Dumping (彻底攻克整场视频误并入单局的底层缺陷)**:
+  - Addressed user feedback: *"实际上并没有根据四个人的特种来区分 你就分了3个场次。但是我们打一局就差不多换完人了"* (All 3 thirty-minute match recordings had previously lumped 91, 77, and 85 rallies into a single `第01局`).
+  - Uncovered and fixed the 3 root causes that previously blocked game segmentation:
+    1. `rest_gap_seconds` was hardcoded to `60.0s`, whereas in recreational badminton play, players swap off court in **22s ~ 50s**. Because inter-rally gaps rarely reached 60.0s, split was mathematically blocked.
+    2. `extract_court_player_embeddings` uncalibrated quadrant masks sampled the static gym back-wall, ceiling lights, bleachers, and side aisles (75% of pixel mask), causing all cosine similarities to artificially hover at 0.85–0.95 regardless of player substitutions.
+    3. Single-frame reference drift gradually smoothed out lineup transitions without step detection.
+- **Perspective Trapezoid Court Masking & Torso Jersey Isolation (透视校准与躯干球衣精准抽取)**:
+  - Confined player detection strictly to the active doubles court trapezoid:
+    - Far court: $Y \in [0.40 H, 0.58 H]$, $X \in [0.36 W, 0.58 W]$
+    - Near court: $Y \in [0.58 H, 0.88 H]$, $X \in [0.24 W, 0.74 W]$
+    Completely eliminates 100% of gym back-wall, bleachers, doors, and side aisle background noise.
+  - In each player's foreground bounding box, isolated the upper body (top $15\% \sim 60\%$), extracting pure jersey color signatures while discarding shadows, floor reflections, and dark shorts.
+- **Amateur Rotation Timing & Dual-Trigger State Machine (业余俱乐部轮转物理时间与状态机)**:
+  - Adapted `rest_gap_seconds` to `22.0s` (detecting 22s–50s player rotations).
+  - Added `long_intermission_seconds` at `45.0s` (physical water/rest break between games, even when returning to court).
+  - Added running exponential moving average (EMA) reference lineup for current game to eliminate single-shot occlusion noise.
+  - Added CLI options: `--rest-gap`, `--long-intermission`, `--min-rallies-per-game`.
+- **Dataset Re-Partitioning & Verification (全量实战数据分局重构完成)**:
+  - **Match 1 (`050`, 67 rallies)**: Automatically partitioned into **2 distinct games**:
+    - 第01局: 12 rallies (00分00秒 至 05分04秒, 5分4秒)
+    - 第02局: 55 rallies (05分37秒 至 29分59秒, 24分21秒)
+  - **Match 2 (`051`, 77 rallies)**: Automatically partitioned into **3 distinct games**:
+    - 第01局: 35 rallies (00分25秒 至 12分34秒, 12分9秒)
+    - 第02局: 21 rallies (12分58秒 至 22分14秒, 9分15秒)
+    - 第03局: 21 rallies (23分06秒 至 29分36秒, 6分31秒)
+  - **Match 3 (`052`, 71 rallies)**: Automatically partitioned into **4 distinct games**:
+    - 第01局: 11 rallies (00分07秒 至 03分37秒, 3分29秒)
+    - 第02局: 09 rallies (04分01秒 至 06分54秒, 2分53秒)
+    - 第03局: 41 rallies (07分41秒 至 23分22秒, 15分41秒)
+    - 第04局: 10 rallies (24分03秒 至 28分39秒, 4分35秒)
+  - All 23 unit tests pass in `tests/`.
+
+---
+
+## [1.4.9] - 2026-11-02
 
 ### 🚀 Major Fix: Ball-Change Intermission Elimination & Optical Serve Cadence Verification (分间换球死球彻底过滤与发球光学节奏双向校验版)
 - **Eliminated Ball-Change Intermission Clips (彻底消除分间换球漫步与隔壁场地穿透误剪为多拍)**:
