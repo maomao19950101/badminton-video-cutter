@@ -34,8 +34,15 @@ from match_segmenter import (
     extract_court_player_embeddings,
     partition_rallies_by_game
 )
+from modes_handler import (
+    generate_condensed_reel,
+    generate_vertical_clip,
+    filter_solo_rallies,
+    generate_review_package,
+    categorize_showcase_rallies,
+)
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -829,7 +836,14 @@ def main():
     parser.add_argument("--version", "-v", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--input", "-i", required=True, help="Input video file or directory of match videos")
     parser.add_argument("--output", "-o", required=True, help="Output root directory")
-    parser.add_argument("--mode", choices=["duopai", "serve_kill", "all"], default="all", help="Extraction mode")
+    parser.add_argument(
+        "--mode",
+        choices=["all", "highlight", "duopai", "serve_kill", "condensed", "vertical", "solo", "review", "showcase"],
+        default="all",
+        help="Extraction mode: all/highlight (默认多拍+秒杀), condensed (比赛浓缩纯享), vertical (9:16竖屏短视频), solo (个人主角光环), review (发接发与技战术复盘), showcase (战术风格分类集锦)"
+    )
+    parser.add_argument("--player", choices=["near_left", "near_right", "far_left", "far_right", "auto"], default="near_left", help="Target player quadrant for --mode solo (default: near_left)")
+    parser.add_argument("--aspect-ratio", choices=["9:16", "1:1", "16:9"], default="9:16", help="Target aspect ratio for --mode vertical (default: 9:16)")
     parser.add_argument("--reel", action="store_true", default=False, help="Generate concatenated multi-shot & serve-kill highlight reels (默认关闭，仅在明确指定 --reel 时才生成整场大合集/跨场大合集，节省剪辑耗时与磁盘空间)")
     parser.add_argument("--gif", action="store_true", help="Generate lightweight WeChat stickers/GIFs")
     parser.add_argument("--slowmo", action="store_true", help="Generate broadcast-grade 0.4x slow motion replays")
@@ -919,7 +933,7 @@ def main():
             filtered_out = raw_peak_count - len(peaks)
             print(f"  📷 机位实战时间窗: {stable_start:.1f}s ~ {unstable_end:.1f}s (排除开机固定/散场关机杂音 {filtered_out} 处，保留实战击球 {len(peaks)} 次)")
 
-            if args.mode in ["duopai", "all"]:
+            if args.mode in ["all", "highlight", "duopai", "condensed", "vertical", "solo", "review", "showcase"]:
                 rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=args.min_hits, cap=cap, fps=fps, vpath=vpath)
                 print(f"  🏸 Found {len(rallies)} raw candidate rallies")
 
@@ -970,6 +984,14 @@ def main():
                         "dur": dur,
                         "peaks": r_peaks
                     })
+
+                if args.mode == "solo":
+                    valid_rallies = filter_solo_rallies(valid_rallies, target_player=args.player)
+                    print(f"  🌟 [主角光环模式] Filtered {len(valid_rallies)} rallies for player [{args.player}]")
+
+                if args.mode == "showcase":
+                    showcase_cats = categorize_showcase_rallies(valid_rallies)
+                    print(f"  💥 [风格分类集锦模式] Categorized into Smash/Marathon/Drive styles")
 
                 cut_tasks = []
                 all_game_dirs = []
@@ -1111,7 +1133,56 @@ def main():
                         if os.path.exists(clip_wav):
                             os.remove(clip_wav)
 
-            if args.mode in ["serve_kill", "all"]:
+                # Mode-specific post-processing
+                if args.mode == "condensed":
+                    print(f"  ⏱️ [比赛浓缩纯享模式] Generating seamless continuous match reel...")
+                    if all_game_dirs:
+                        for g_dir_path, g_idx, g_count in all_game_dirs:
+                            g_clips = dir_to_clips.get(g_dir_path, [])
+                            if g_clips:
+                                c_name = f"00_【第{g_idx:02d}局_比赛浓缩纯享】_全{len(g_clips)}段连贯版.mp4"
+                                generate_condensed_reel(args.ffmpeg, g_clips, os.path.join(g_dir_path, c_name))
+                                print(f"    🎞️ Generated game {g_idx} condensed reel: {c_name}")
+                    else:
+                        c_name = f"00_【{display_name}_比赛浓缩纯享】_全{len(clip_paths)}段连贯版.mp4"
+                        generate_condensed_reel(args.ffmpeg, clip_paths, os.path.join(match_dir, c_name))
+                        print(f"    🎞️ Generated match condensed reel: {c_name}")
+
+                elif args.mode == "vertical":
+                    vert_dir = os.path.join(match_dir, "竖屏9比16自媒体短视频")
+                    os.makedirs(vert_dir, exist_ok=True)
+                    print(f"  📱 [9:16竖屏短视频模式] Converting top clips to mobile vertical video...")
+                    for v_idx, c_path in enumerate(clip_paths[:5], 1):
+                        v_name = f"竖屏_{os.path.basename(c_path)}"
+                        v_out = os.path.join(vert_dir, v_name)
+                        generate_vertical_clip(args.ffmpeg, c_path, v_out, aspect_ratio=args.aspect_ratio)
+                    print(f"    📱 Saved vertical clips to: {vert_dir}")
+
+                elif args.mode == "review":
+                    print(f"  🎓 [技战术复盘模式] Generating tactical & serve-return review package...")
+                    rev_clips, rev_report = generate_review_package(args.ffmpeg, vpath, valid_rallies, match_dir)
+                    print(f"    📝 Tactical Review Report saved to: {rev_report}")
+
+                elif args.mode == "showcase":
+                    showcase_dir = os.path.join(match_dir, "战术风格分类集锦")
+                    os.makedirs(showcase_dir, exist_ok=True)
+                    for cat_name, cat_rallies in showcase_cats.items():
+                        if not cat_rallies:
+                            continue
+                        cat_sub = os.path.join(showcase_dir, cat_name)
+                        os.makedirs(cat_sub, exist_ok=True)
+                        cat_clip_paths = []
+                        for cr in cat_rallies:
+                            for cp in clip_paths:
+                                if f"_{format_time_zh(cr['s_cut'])}至" in cp:
+                                    cat_clip_paths.append(cp)
+                                    break
+                        if cat_clip_paths:
+                            c_reel = f"00_【{cat_name}】_全{len(cat_clip_paths)}段大合集.mp4"
+                            generate_condensed_reel(args.ffmpeg, cat_clip_paths, os.path.join(cat_sub, c_reel))
+                    print(f"    💥 Showcase style albums saved to: {showcase_dir}")
+
+            if args.mode in ["serve_kill", "all", "highlight"]:
                 # Ensure multi-shot rallies are present for gap boundary benchmarking
                 if "rallies" not in locals():
                     rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=args.min_hits, cap=cap, fps=fps, vpath=vpath)

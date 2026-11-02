@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.5.0
-description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), segmenting matches by player lineups/games (球员特征重识别与实战全自动球局分段), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
+version: 1.6.0
+description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), segmenting matches by player lineups/games (球员特征重识别与实战全自动球局分段), generating mobile 9:16 vertical shorts, pure-play condensed reels, player solo focus reels, or tactical serve-return reviews.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.5.0)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.6.0)
 
-> **Current Release**: `v1.5.0` (2026-11-02) · **Calibrated Perspective Torso ReID & Amateur Match Game Segmentation (透视校准躯干重识别与业余全自动分局版)**  
+> **Current Release**: `v1.6.0` (2026-11-02) · **Multi-Mode Production Engine & Specialized Workflow Suite (多模式工作流套件版)**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -59,6 +59,14 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 >      1) *Long Intermission*: $\text{gap} \ge 45.0\text{s}$ (rest/water break between games, even when returning to court).
 >      2) *Lineup Substitution*: $\text{gap} \ge 22.0\text{s}$ AND bipartite similarity $< 0.65$ ($\ge 2$ players swapped off court).
 >    - **Directory Routing**: Partitions rallies into separate subdirectories (`第01局_实战对阵_XX拍/`, `第02局_实战对阵_XX拍/`, etc.) with renumbered clips (`多拍01 ~ 多拍XX`) and updated `game_summary.txt`. Supported CLI flags: `--split-by-game` (default), `--no-split-by-game`, `--lineup-threshold 0.65`, `--rest-gap 22.0`, `--long-intermission 45.0`, `--min-rallies-per-game 8`.
+> 10. **Multi-Mode Production Engine & Backward Compatibility (六大多样化实战模式规范 - v1.6.0)**:
+>    - **Default Mode Invariance (默认行为 100% 保持现状)**: When `--mode` is omitted or set to `--mode all` (or `--mode highlight`), the tool behaves identically to standard v1.5.0, extracting clean multi-shot rallies + serve-kills with game partitioning and zero unwanted overhead.
+>    - **Specialized Workflows Supported**:
+>      1) `--mode condensed`: Strips dead-time and seamlessly concatenates all rallies into continuous match playback reels (`00_【第XX局_比赛浓缩纯享】_全XX段连贯版.mp4`) in $< 1\text{s}$ via lossless stream concat.
+>      2) `--mode vertical`: Smart mobile 9:16 vertical crop centered on court trapezoid (`--aspect-ratio 9:16`), saved into `竖屏9比16自媒体短视频/`.
+>      3) `--mode solo`: Focuses exclusively on the designated player (`--player [near_left|near_right|far_left|far_right]`) to extract personal highlight reels.
+>      4) `--mode review`: Extracts serve & return opening windows (first 3.5s) into `发接发前三拍复盘/` and compiles a comprehensive `tactical_review_report.txt`.
+>      5) `--mode showcase`: Categorizes rallies into tactical styles: `01_后场重杀突破`, `02_多拍高能拉锯`, `03_网前平抽快攻`.
 
 ---
 

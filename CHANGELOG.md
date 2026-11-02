@@ -6,7 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.5.0] - 2026-11-02 (Current Release)
+## [1.6.0] - 2026-11-02 (Current Release)
+
+### 🚀 Major Feature: Multi-Mode Production Engine & Specialized Workflow Suite (多模式工作流套件版)
+- **Default Mode Backward-Compatibility Guaranteed (默认模式 100% 保持现状)**:
+  - Default `--mode all` (or `--mode highlight`) preserves the exact behavior of `v1.5.0`: multi-shot rally highlight extraction, serve-kill extraction, player ReID game partitioning, and clean stream-copy lossless cutting without extra overhead.
+- **Five New Production & Analytical Modes (`modes_handler.py`)**:
+  - **`--mode condensed` (比赛浓缩纯享模式)**: Strips dead-ball downtime between points and losslessly concatenates rallies into a continuous match replay (`00_【第XX局_比赛浓缩纯享】_全XX段连贯版.mp4`) in $< 1\text{s}$ using ffmpeg concat demuxer.
+  - **`--mode vertical` (9:16 竖屏自媒体短视频模式)**: Automatically crops 16:9 court recording centered on the playing trapezoid into mobile 9:16 vertical video (`--aspect-ratio 9:16`), saved into `竖屏9比16自媒体短视频/`.
+  - **`--mode solo` (个人主角光环模式)**: Focuses exclusively on the designated player (`--player [near_left|near_right|far_left|far_right]`) to extract personal highlight reels.
+  - **`--mode review` (技战术与发接发复盘模式)**: Extracts serve & return opening windows (first 3.5s) into `发接发前三拍复盘/` and compiles a comprehensive `tactical_review_report.txt` with rally tempo distribution.
+  - **`--mode showcase` (战术风格分类集锦模式)**: Automatically categorizes rallies into style albums: `01_后场重杀突破`, `02_多拍高能拉锯`, `03_网前平抽快攻`.
+- **Comprehensive Test Coverage**: Added `tests/test_modes.py`, all 28 unit tests pass.
+
+---
+
+## [1.5.0] - 2026-11-02
 
 ### 🚀 Major Feature & Architecture Overhaul: Calibrated Perspective Torso ReID & Amateur Match Game Segmentation (透视校准躯干重识别与业余全自动分局版)
 - **Resolved Root Cause of 1-Game Dumping (彻底攻克整场视频误并入单局的底层缺陷)**:
