@@ -236,10 +236,16 @@ def fast_camera_match_window(cap, fps, dur):
 
 def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, stable_start=0.0, unstable_end=99999.0, vpath=None, min_hits=5):
     """
-    True Badminton Play & Personnel Exit/Switch Verification:
+    True Badminton Play & Personnel Exit/Switch Verification (v1.4.9):
     - If hit_count < min_hits: reject immediately (short dead-ball tap clusters or adjacent court noise).
-    - If the clip contains >= 15 verified active hits, it is confirmed high-tempo real play.
-    - For clips meeting min_hits, checks that camera is stable and active court is occupied.
+    - Optical serve & opening cadence verification:
+      If the opening strokes are suspiciously rapid (g0 < 0.55s and g1 < 0.55s, impossible for legal serve flight)
+      and optical motion at the opening hit indicates dormant/non-serving players, reject immediately.
+    - Samples 5 points across the clip to verify bilateral court engagement and camera stability:
+      1. Handheld mount/unmount camera shake (top_d > 9.0 and avg_our < 6.0) -> reject.
+      2. Completely empty/dormant court (avg_our < 4.8 or max_our < 7.5) -> reject.
+      3. Far court dormant / non-bilateral play (avg_far < 5.5 and max_far < 8.5) -> reject.
+      4. Adjacent court dominant motion (b_avg >= 13.0 and b_avg > 1.15 * avg_our) -> reject.
     """
     dur = e_cut - s_cut
     if dur < min_dur:
@@ -247,25 +253,43 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     hit_count = len(r_peaks) if r_peaks else 0
     if hit_count < min_hits:
         return False
-    if hit_count >= min_hits:
-        return True
     if cap is None and not vpath:
         return True
 
-    pts = [s_cut + 0.25 * dur, s_cut + 0.50 * dur, s_cut + 0.75 * dur]
+    # 1. Opening serve & cadence verification (eliminates adjacent court rallies bleed during intermissions)
+    if r_peaks and len(r_peaks) >= 3:
+        g0 = r_peaks[1][0] - r_peaks[0][0]
+        g1 = r_peaks[2][0] - r_peaks[1][0]
+        if g0 < 0.55 and g1 < 0.55:
+            m_open = sample_instant_motion(cap, fps, r_peaks[0][0], vpath=vpath)
+            if m_open is not None and (m_open[1] < 3.0 or m_open[0] < 5.0):
+                return False
+
+    # 2. Multilateral court engagement & camera stability check
+    pts = np.linspace(s_cut + 0.15 * dur, e_cut - 0.15 * dur, 5)
     motions = [sample_instant_motion(cap, fps, pt, vpath=vpath) for pt in pts]
     motions = [m for m in motions if m is not None]
     if not motions:
         return True
 
-    avg_our = sum(m[0] for m in motions) / len(motions)
-    max_top = max(m[3] for m in motions)
+    avg_our = float(np.mean([m[0] for m in motions]))
+    max_our = float(max([m[0] for m in motions]))
+    avg_far = float(np.mean([m[1] for m in motions]))
+    max_far = float(max([m[1] for m in motions]))
+    top_d_max = float(max([m[3] for m in motions]))
+    b_avg = float(np.mean([m[4] for m in motions]))
 
     # Handheld mount/unmount camera shake
-    if max_top > 9.0 and avg_our < 6.0:
+    if top_d_max > 9.0 and avg_our < 6.0:
         return False
     # Completely empty/dormant court
-    if avg_our < 3.8:
+    if avg_our < 4.8 or max_our < 7.5:
+        return False
+    # Far court dormant (players standing around waiting, drinking water, changing balls)
+    if avg_far < 5.5 and max_far < 8.5:
+        return False
+    # Adjacent court dominant motion (Court 7 active while our court is scooping balls)
+    if b_avg >= 13.0 and b_avg > 1.15 * avg_our:
         return False
     return True
 
@@ -427,7 +451,11 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
 
                 # Rule 2: Inter-point break / pre-serve gap
                 elif gap >= 2.10:
-                    if c[i][1] < 7.0e6 or (i + 2 < len(c) and 0.60 <= c[i + 2][0] - c[i + 1][0] <= 2.20 and c[i + 1][1] < 1.5e7):
+                    # Decouple if gap >= 2.10s occurs on exactly 2 hits followed by tight net tap (< 0.65s)
+                    # (eliminates floor scoop + flip before an adjacent court rally)
+                    if len(sub) == 2 and i + 2 < len(c) and (c[i + 2][0] - c[i + 1][0] < 0.65):
+                        is_break = True
+                    elif c[i][1] < 7.0e6 or (i + 2 < len(c) and 0.60 <= c[i + 2][0] - c[i + 1][0] <= 2.20 and c[i + 1][1] < 1.5e7):
                         is_break = True
                     elif cap is not None or vpath is not None:
                         m = sample_instant_motion(cap, fps, c[i][0] + 0.5 * gap, vpath=vpath)
@@ -834,6 +862,9 @@ def main():
         "VID_20261019_205459_048": "03_场次三_双打实战_205459",
         "VID_20261019_220708_049": "04_场次四_双打实战_220708",
         "VID_20261019_223559_050": "05_场次五_双打实战_223559",
+        "VID_20261029_203442_050": "01_场次一_双打实战_050",
+        "VID_20261029_203442_051": "02_场次二_双打实战_051",
+        "VID_20261029_203442_052": "03_场次三_双打实战_052",
     }
     zh_nums = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
 
@@ -912,6 +943,23 @@ def main():
                     dur = e_cut - s_cut
                     if dur < 5.0 or len(r_peaks) < args.min_hits:
                         continue
+
+                    # Inter-rally reset turnaround & cleaved rally healing (v1.4.9)
+                    if valid_rallies:
+                        prev_r = valid_rallies[-1]
+                        turnaround = s_cut - prev_r["e_cut"]
+                        hit_gap = r_peaks[0][0] - prev_r["peaks"][-1][0]
+                        if turnaround < 3.0:
+                            prev_had_smash = any(prev_r["peaks"][k][1] >= 4.5e7 for k in range(max(0, len(prev_r["peaks"]) - 2), len(prev_r["peaks"])))
+                            if hit_gap <= 2.20 and not (prev_had_smash and prev_r["peaks"][-1][1] >= 2.0e7):
+                                prev_r["e_cut"] = e_cut
+                                prev_r["dur"] = prev_r["e_cut"] - prev_r["s_cut"]
+                                prev_r["peaks"].extend(r_peaks)
+                                print(f"    🏸 [合并连续多拍] 合并至上一回合: 新区间 {format_time_zh(prev_r['s_cut'])}至{format_time_zh(prev_r['e_cut'])} ({prev_r['dur']:.1f}s)")
+                                continue
+                            elif turnaround < 0.50 and hit_gap < 2.50:
+                                print(f"    🚫 [过滤分间杂音] 跳过分间捡球/换球片段: {format_time_zh(s_cut)}至{format_time_zh(e_cut)} (距上一分仅 {turnaround:.2f}s)")
+                                continue
 
                     valid_rallies.append({
                         "s_cut": s_cut,

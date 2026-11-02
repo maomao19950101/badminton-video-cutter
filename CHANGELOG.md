@@ -6,7 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.8] - 2026-11-02 (Current Release)
+## [1.4.9] - 2026-11-02 (Current Release)
+
+### 🚀 Major Fix: Ball-Change Intermission Elimination & Optical Serve Cadence Verification (分间换球死球彻底过滤与发球光学节奏双向校验版)
+- **Eliminated Ball-Change Intermission Clips (彻底消除分间换球漫步与隔壁场地穿透误剪为多拍)**:
+  - Fixed issue reported on `多拍17` (04分38秒至04分58秒_【超长高能拉锯】_21秒): players on our court concluded Point 16, a player picked up the old shuttlecock from the floor, walked to the net post basket outside the doubles boundary to retrieve a new shuttlecock, and tested the feathers while Court 7 (adjacent court) played an active 16-hit rally in the background.
+  - In previous versions, `check_clip_is_real_play()` short-circuited if `hit_count >= min_hits`, allowing 16 hits from Court 7 during an intermission to bypass all visual checks.
+- **Physical Serve Cadence & Optical Opening Verification (发球物理飞行节奏与开球双模态校验)**:
+  - Under BWF physics and aerodynamics, the minimum flight time from a legal serve contact to receiver contact across the net is $\ge 0.65\text{s}$ (fast low serve) or $1.8\text{s} \sim 2.8\text{s}$ (high serve). Rapid consecutive hits with $g_0 < 0.55\text{s}$ and $g_1 < 0.55\text{s}$ represent flat-drive net exchanges on adjacent courts or dead-ball racket taps, never an opening serve.
+  - Added optical serve stance verification at `r_peaks[0][0]`: if initial cadence is suspicious ($g_0 < 0.55\text{s}$ and $g_1 < 0.55\text{s}$) and far/near court motion indicates players are dormant or not delivering/receiving a serve (`m_open[1] < 3.0` or `m_open[0] < 5.0`), the clip is strictly rejected.
+- **Rule 2 Decoupling for 2-Hit Floor Scoops (双击捞球与分间空档彻底解耦)**:
+  - In Rule 2 of `extract_multi_shot_rallies`, when a gap $\ge 2.10\text{s}$ occurs after exactly 2 hits followed by rapid noise ($< 0.65\text{s}$), the 2 hits are decoupled into their own candidate and pruned by `len < min_hits`.
+- **Dataset Re-Cut Verification (实战全量重剪验证通过)**:
+  - Successfully re-cut Match 2 (`051`): `多拍17` (换球 21秒) is 100% eliminated. Output directory contains 77 pure, genuine multi-shot rallies with zero false positives.
+  - Passes all 21 unit tests in `tests/test_rally_decoupling.py`.
+
+---
+
+## [1.4.8] - 2026-11-02
 
 ### 🚀 Major Fix: Post-Smash Net Exchange & Bilateral Counter-Attack Preservation (杀球防守反击与网前快节奏相持彻底保全版)
 - **Eliminated False Premature Cleaving in Rule 1 (彻底消除杀球防守起球后的中途腰斩)**:

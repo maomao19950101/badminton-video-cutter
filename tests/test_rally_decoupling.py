@@ -335,6 +335,97 @@ class TestRallyDecoupling(unittest.TestCase):
         self.assertTrue(r["s_cut"] <= 1606.81)
         self.assertTrue(r["e_cut"] >= 1613.95 + 1.50, "e_cut must allow high clear to descend and land on court")
 
+    def test_reject_ball_change_intermission_with_adjacent_court_bleed(self):
+        """
+        Tests that an intermission where players are changing shuttlecocks
+        (floor scoop taps + walk to net basket + adjacent court 16-hit rally bleed)
+        is completely decoupled and eliminated, while the preceding Point 16
+        and subsequent Point 18 are preserved intact. (Fix for Rally 17 in v1.4.9).
+        """
+        peaks = [
+            # Point 16 (20 hits, ends with smash at 268.21, defense at 270.36, net kill at 276.46)
+            (254.51, 1.50e7), # Serve
+            (255.49, 1.38e7), # Return
+            (257.82, 1.57e7), # High clear
+            (259.74, 5.58e6), # Drop
+            (260.43, 1.01e7), # Net push
+            (261.86, 5.70e6), # Lift
+            (262.71, 2.77e7), # Attack
+            (265.44, 1.80e7), # Drive
+            (267.44, 5.95e6), # Block
+            (268.21, 4.99e7), # Smash
+            (270.36, 2.48e7), # Defense
+            (270.72, 3.03e7), # Net attack
+            (271.90, 2.94e7), # Drive
+            (272.77, 1.40e7),
+            (273.49, 2.19e7),
+            (274.17, 7.36e6),
+            (274.89, 1.77e7),
+            (275.61, 1.44e7),
+            (276.11, 3.38e7),
+            (276.46, 2.02e7), # Winner / ground contact
+            # Intermission (ball change): 2 floor scoop taps by player in black
+            (279.00, 1.44e7), # Floor scoop 1
+            (280.42, 2.35e7), # Floor flip into hand 2 (gap=1.42s)
+            # Gap of 2.69s as player walks to net post basket
+            # Court 7 (adjacent court) plays 16 hits:
+            (283.11, 1.31e7), # Court 7 shot 1
+            (283.64, 7.53e6), # Court 7 shot 2 (gap=0.53s < 0.65s)
+            (284.12, 7.97e6),
+            (285.39, 7.37e6),
+            (285.77, 1.67e7),
+            (287.18, 1.56e7),
+            (287.90, 2.38e7),
+            (288.87, 1.27e7),
+            (290.32, 4.41e6),
+            (291.56, 1.14e7),
+            (292.62, 6.47e6),
+            (294.10, 6.74e6),
+            (295.08, 8.28e6),
+            (295.57, 1.02e7),
+            (295.94, 3.61e7),
+            (297.33, 9.46e6),
+            # Gap of 4.31s while players reset
+            # Point 18 (18 hits, starts with high serve at 301.64, return at 304.38)
+            (301.64, 4.88e7), # High serve
+            (304.38, 8.24e6), # Return of high serve (gap=2.74s)
+            (304.80, 1.28e7), # Net cutoff
+            (305.17, 2.21e7), # Drive
+            (306.37, 1.14e7),
+            (307.04, 1.43e7),
+            (307.56, 1.59e7),
+            (308.33, 7.08e6),
+            (308.70, 1.42e7),
+            (309.05, 6.17e6),
+            (309.48, 6.57e6),
+            (309.85, 2.14e7),
+            (310.83, 1.16e8), # Smash
+            (311.82, 3.71e7),
+            (312.51, 2.13e7),
+            (313.14, 1.24e7),
+            (314.23, 4.39e7), # Smash
+            (315.44, 5.84e6), # Ground contact
+        ]
+        v_dur = 1812.0
+        rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=5)
+
+        # Floor scoop taps [279.00, 280.42] must decouple from Court 7 (gap=2.69s >= 2.10s, len(sub)==2, next_g=0.53s < 0.65s)
+        # and be pruned because len(sub) == 2 < min_hits (5).
+        # Point 16 and Point 18 must be preserved!
+        p16 = next((r for r in rallies if abs(r["first_hit"] - 254.51) < 1.0), None)
+        self.assertIsNotNone(p16, "Point 16 must be preserved")
+        self.assertEqual(p16["hits"], 20)
+        self.assertAlmostEqual(p16["last_hit"], 276.46, places=2)
+
+        p18 = next((r for r in rallies if abs(r["first_hit"] - 301.64) < 1.0), None)
+        self.assertIsNotNone(p18, "Point 18 must be preserved")
+        self.assertEqual(p18["hits"], 18)
+        self.assertAlmostEqual(p18["first_hit"], 301.64, places=2)
+
+        # Confirm no rally starts with the floor scoop at 279.00 or 280.42
+        has_scoop_rally = any(abs(r["first_hit"] - 279.00) < 0.5 or abs(r["first_hit"] - 280.42) < 0.5 for r in rallies)
+        self.assertFalse(has_scoop_rally, "Floor scoop taps during ball change must not form a rally")
+
 
 if __name__ == "__main__":
     unittest.main()
