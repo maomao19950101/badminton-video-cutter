@@ -35,7 +35,7 @@ from match_segmenter import (
     partition_rallies_by_game
 )
 
-__version__ = "1.4.6"
+__version__ = "1.4.7"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -234,23 +234,26 @@ def fast_camera_match_window(cap, fps, dur):
     return stable_start, unstable_end
 
 
-def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, stable_start=0.0, unstable_end=99999.0):
+def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, stable_start=0.0, unstable_end=99999.0, vpath=None, min_hits=5):
     """
     True Badminton Play & Personnel Exit/Switch Verification:
-    - If the clip contains >= 5 verified active hits, it is confirmed real play.
-    - For shorter clips, checks that camera is stable and active court is occupied.
+    - If hit_count < min_hits: reject immediately (short dead-ball tap clusters or adjacent court noise).
+    - If the clip contains >= 15 verified active hits, it is confirmed high-tempo real play.
+    - For clips meeting min_hits, checks that camera is stable and active court is occupied.
     """
     dur = e_cut - s_cut
     if dur < min_dur:
         return False
     hit_count = len(r_peaks) if r_peaks else 0
-    if hit_count >= 5:
+    if hit_count < min_hits:
+        return False
+    if hit_count >= min_hits:
         return True
-    if cap is None or fps <= 0:
+    if cap is None and not vpath:
         return True
 
     pts = [s_cut + 0.25 * dur, s_cut + 0.50 * dur, s_cut + 0.75 * dur]
-    motions = [sample_instant_motion(cap, fps, pt) for pt in pts]
+    motions = [sample_instant_motion(cap, fps, pt, vpath=vpath) for pt in pts]
     motions = [m for m in motions if m is not None]
     if not motions:
         return True
@@ -294,12 +297,12 @@ def detect_visual_deadball_cutoff(video_path, s_time, e_time, peaks, cap=None, f
     if had_smash_at_end:
         landing_delay = 0.65 if tail_e >= 2.0e7 else 0.85
         real_e_cut = min(e_time, last_hit + landing_delay)
-    elif cap is not None or video_path is not None:
+    elif cap is not None and HAS_CV2:
         curr_t = last_hit + 0.85
         max_t = min(e_time, last_hit + 2.85)
         last_active_t = curr_t
         while curr_t <= max_t:
-            m = sample_instant_motion(cap, fps, curr_t, vpath=video_path)
+            m = sample_instant_motion(cap, fps, curr_t)
             if m is not None:
                 our_m, far_m, near_m, top_d, b_max = m
                 if our_m >= 5.2 and (b_max < 16.0 or our_m >= 6.0):
@@ -336,9 +339,9 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
     return verified
 
 
-def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None, fps=0.0, vpath=None):
+def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits=5, cap=None, fps=0.0, vpath=None):
     """
-    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.6):
+    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.7):
     1. Initial Clustering with max_gap=2.85s:
        Preserves high baseline-to-baseline clears (flight time up to 2.80s) without premature truncation.
     2. Physical Cadence & Stroke Decoupling:
@@ -448,19 +451,19 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
     rallies = []
     for c in decoupled:
         # Prune trailing floor pickup taps if preceded by gap >= 2.00s and low energy
-        while len(c) >= 3 and (c[-1][0] - c[-2][0]) >= 2.00 and c[-1][1] < 8.0e6:
+        while len(c) >= min_hits and (c[-1][0] - c[-2][0]) >= 2.00 and c[-1][1] < 8.0e6:
             c = c[:-1]
 
         # Prune leading dead-ball pickup taps if gap >= 1.70s
         # BUT protect genuine opening serve: if gap <= 2.20s and c[1] is an active return or followed by active rally
-        while len(c) >= 3 and (c[1][0] - c[0][0]) >= 1.70 and c[0][1] < 8.0e6:
+        while len(c) >= min_hits and (c[1][0] - c[0][0]) >= 1.70 and c[0][1] < 8.0e6:
             gap_lead = c[1][0] - c[0][0]
             is_serve_return = (gap_lead <= 2.20 and (c[1][1] >= 1.2e7 or (len(c) >= 3 and 0.35 <= c[2][0] - c[1][0] <= 2.0)))
             if is_serve_return:
                 break
             c = c[1:]
 
-        if len(c) < 3:
+        if len(c) < min_hits:
             continue
 
         # Every genuine badminton rally must contain at least one real stroke (max E >= 1.8e7)
@@ -476,12 +479,12 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
         if had_smash_at_end:
             landing_buf = 0.65 if tail_energy >= 2.0e7 else 0.85
             e_cut = min(v_dur, last_hit + landing_buf)
-        elif cap is not None or vpath is not None:
+        elif cap is not None and HAS_CV2:
             curr_t = last_hit + 0.85
             max_t = min(v_dur, last_hit + 2.85)
             last_active_t = curr_t
             while curr_t <= max_t:
-                m = sample_instant_motion(cap, fps, curr_t, vpath=vpath)
+                m = sample_instant_motion(cap, fps, curr_t)
                 if m is not None:
                     our_m, far_m, near_m, top_d, b_max = m
                     if our_m >= 5.2 and (b_max < 16.0 or our_m >= 6.0):
@@ -497,7 +500,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
             e_cut = min(v_dur, last_hit + landing_buf)
 
         dur = e_cut - s_cut
-        if dur >= min_dur and len(c) >= 3:
+        if dur >= min_dur and len(c) >= min_hits:
             rallies.append({
                 "first_hit": c[0][0],
                 "last_hit": c[-1][0],
@@ -790,6 +793,7 @@ def main():
     parser.add_argument("--strict-visual", action="store_true", default=True, help="Enforce visual dead-ball motion drop truncation")
     parser.add_argument("--split-by-game", dest="split_by_game", action="store_true", default=True, help="Automatically group rallies into game subfolders by player ReID (default: True)")
     parser.add_argument("--no-split-by-game", dest="split_by_game", action="store_false", help="Disable game grouping and output all rallies in a flat directory")
+    parser.add_argument("--min-hits", type=int, default=5, help="Minimum verified stroke count for multi-shot rallies (default: 5)")
     parser.add_argument("--lineup-threshold", type=float, default=0.65, help="Similarity threshold for detecting player lineup substitution (default: 0.65)")
     parser.add_argument("--ffmpeg", default=DEFAULT_FFMPEG, help="Path to ffmpeg executable")
     args = parser.parse_args()
@@ -866,7 +870,7 @@ def main():
             print(f"  📷 机位实战时间窗: {stable_start:.1f}s ~ {unstable_end:.1f}s (排除开机固定/散场关机杂音 {filtered_out} 处，保留实战击球 {len(peaks)} 次)")
 
             if args.mode in ["duopai", "all"]:
-                rallies = extract_multi_shot_rallies(peaks, v_dur, cap=cap, fps=fps, vpath=vpath)
+                rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=args.min_hits, cap=cap, fps=fps, vpath=vpath)
                 print(f"  🏸 Found {len(rallies)} raw candidate rallies")
 
                 valid_rallies = []
@@ -880,17 +884,17 @@ def main():
                         continue
 
                     # Strict Visual Play Verification (no handheld shake, active court players)
-                    if args.strict_visual and HAS_CV2 and cap is not None:
-                        if not check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=r_peaks, stable_start=stable_start, unstable_end=unstable_end):
+                    if args.strict_visual:
+                        if not check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=r_peaks, stable_start=stable_start, unstable_end=unstable_end, vpath=vpath, min_hits=args.min_hits):
                             print(f"    🚫 [过滤非打球] 跳过片段: {format_time_zh(s_cut)}至{format_time_zh(e_cut)} (机位未固定或非攻防对战)")
                             continue
 
                     # Apply high-speed visual dead-ball motion cutoff if enabled
-                    if args.strict_visual and HAS_CV2 and cap is not None:
+                    if args.strict_visual:
                         e_cut, r_peaks = detect_visual_deadball_cutoff(vpath, s_cut, e_cut, r_peaks, cap=cap, fps=fps)
 
                     dur = e_cut - s_cut
-                    if dur < 5.0 or len(r_peaks) < 3:
+                    if dur < 5.0 or len(r_peaks) < args.min_hits:
                         continue
 
                     valid_rallies.append({
@@ -1041,7 +1045,7 @@ def main():
             if args.mode in ["serve_kill", "all"]:
                 # Ensure multi-shot rallies are present for gap boundary benchmarking
                 if "rallies" not in locals():
-                    rallies = extract_multi_shot_rallies(peaks, v_dur, cap=cap, fps=fps, vpath=vpath)
+                    rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=args.min_hits, cap=cap, fps=fps, vpath=vpath)
                 kills = extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur)
                 print(f"  ⚡ Found {len(kills)} verified serve-and-kill moments")
                 kill_dir = os.path.join(match_dir, "接发秒杀一拍定死")

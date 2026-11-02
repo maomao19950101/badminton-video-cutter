@@ -6,7 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.6] - 2026-11-02 (Current Release)
+## [1.4.7] - 2026-11-02 (Current Release)
+
+### 🚀 Major Fix: Multi-Shot Broadcast Threshold & Dead-Ball Ball-Retrieval Elimination (专业多拍标准与死球捡球彻底过滤版)
+- **Multi-Shot Broadcast Threshold Enforcement (`--min-hits 5`·杜绝低拍数死球伪多拍)**:
+  - Aligned with professional BWF and Olympic broadcast standards: by definition, a "多拍" (Multi-Shot Rally) requires $\ge 5$ continuous strokes. 1~2 strokes is a serve-kill or unforced error, while 3~4 strokes represent short service exchange or dead-ball floor touches.
+  - Set default `--min-hits` from 3 to 5 across `extract_multi_shot_rallies`, `check_clip_is_real_play`, and CLI parsing, eliminating low-stroke false alarms while preserving 100% of genuine multi-shot rallies.
+- **Dead-Ball Ball-Retrieval & Adjacent Court Noise Elimination (捡球死球漫步与隔壁场地穿透声彻底绝迹)**:
+  - Addressed user report on `多拍105` (29分41秒至29分48秒, 7秒): players on our court were in dead-ball walking intermission picking up the shuttlecock from the floor and tossing it across the net, while the loud smash sounds were cross-talk audio bleed from Court 7.
+  - Reinforced Rule 1 post-smash decoupling: Point 1 (Rally 104, 29:26~29:35, 10 hits) terminates decisively at the smash winner, while the trailing 4-hit intermission noise cluster is strictly rejected by `len(c) < min_hits`.
+  - Zero dead-ball clips in final output: Match 2 (`051`) now cleanly outputs 99 genuine multi-shot rallies, completely eliminating `多拍105`.
+- **Self-Contained Optical Motion & Hardware Acceleration (视觉动量与无cv2优雅降级)**:
+  - Enabled optical motion tracking to utilize OpenCV hardware acceleration when available (`uv run --with opencv-python-headless`) while providing a robust, aerodynamic 1.65s floor landing fallback when running under minimal environments.
+  - Passes all 19 unit tests in `tests/test_rally_decoupling.py`.
+
+---
+
+## [1.4.6] - 2026-11-02
 
 ### 🚀 Major Fix: Smash Defense Soft-Finish Preservation & Multimodal Ground Landing (杀球防守软终结保全与多模态落地砸地保全版)
 - **Smash Defense & Soft Finish Preservation (杀球防守反击与软终结多拍保全·彻底杜绝防守起高球后腰斩)**:

@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.4.6
+version: 1.4.7
 description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), segmenting matches by player lineups/games (球员识别与全自动球局分段), filtering dead-ball intervals/service faults, generating WeChat GIF stickers, rendering broadcast slow-mo/HUD overlays, or compiling continuous highlight reels.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.4.6)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.4.7)
 
-> **Current Release**: `v1.4.6` (2026-11-02) · **Smash Defense Soft-Finish Preservation & Multimodal Ground Landing (杀球防守软终结保全与多模态落地砸地保全版)**  
+> **Current Release**: `v1.4.7` (2026-11-02) · **Multi-Shot Broadcast Threshold & Dead-Ball Ball-Retrieval Elimination (专业多拍标准与死球捡球彻底过滤版)**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.

@@ -22,10 +22,10 @@ class TestRallyDecoupling(unittest.TestCase):
         is strictly decoupled from a subsequent serve, even when dead-ball
         floor scoop taps bridge the intermission with individual gaps < 2.85s.
         """
-        # Simulated sequence representing Rally 81 from Match 2:
+        # Simulated sequence representing Rally 81 from Match 2 followed by a genuine 5-shot Point 2:
         # Point 1: 10 hits ending with smash (1774.00, E=1.55e8), block (1774.53), landing (1775.09)
         # Intermission: 5 floor scoop taps (1775.96, 1776.44, 1778.07, 1778.88, 1780.21)
-        # Point 2: 4 hits starting with serve (1782.38), return (1784.05), hit (1784.99), kill (1786.67)
+        # Point 2: 5 hits starting with serve (1782.38), return (1784.05), hit (1784.99), kill (1786.67), counter (1787.80)
         peaks = [
             (1767.19, 1.90e7), # P1 Serve
             (1769.16, 1.21e7), # P1 Return
@@ -46,6 +46,7 @@ class TestRallyDecoupling(unittest.TestCase):
             (1784.05, 5.62e6), # P2 Return
             (1784.99, 2.30e7), # P2 Stroke
             (1786.67, 1.59e7), # P2 Winner
+            (1787.80, 2.50e7), # P2 Continuation
         ]
         v_dur = 1812.0
 
@@ -64,13 +65,55 @@ class TestRallyDecoupling(unittest.TestCase):
 
         # Verify Point 2 bounds
         self.assertAlmostEqual(p2["first_hit"], 1782.38, places=2)
-        self.assertAlmostEqual(p2["last_hit"], 1786.67, places=2)
-        self.assertEqual(p2["hits"], 4)
+        self.assertAlmostEqual(p2["last_hit"], 1787.80, places=2)
+        self.assertEqual(p2["hits"], 5)
         self.assertTrue(p2["s_cut"] <= 1782.38)
-        self.assertTrue(p2["e_cut"] >= 1786.67)
+        self.assertTrue(p2["e_cut"] >= 1787.80)
 
         # Verify no dead-ball overlap
         self.assertTrue(p1["e_cut"] < p2["s_cut"], "Rallies must not overlap")
+
+    def test_reject_deadball_ball_retrieval_after_rally(self):
+        """
+        Tests that an intermission where players are simply walking and retrieving
+        shuttlecocks (or cross-talk impact from adjacent courts with < 5 hits)
+        is completely rejected, while the preceding genuine multi-shot rally
+        is cleanly preserved. (Fix for Rally 105 in v1.4.7).
+        """
+        peaks = [
+            (1767.19, 1.90e7), # P1 Serve
+            (1769.16, 1.21e7), # P1 Return
+            (1770.44, 5.14e6),
+            (1771.95, 2.14e7),
+            (1772.43, 8.40e6),
+            (1772.89, 2.68e7),
+            (1773.59, 1.08e7),
+            (1774.00, 1.55e8), # P1 Smash
+            (1774.53, 1.53e7), # P1 Block
+            (1775.09, 5.86e6), # P1 Ground Contact
+            (1775.96, 1.15e7), # Floor scoop 1
+            (1776.44, 1.52e7), # Floor scoop 2
+            (1778.07, 1.11e7), # Floor tap 3
+            (1778.88, 6.36e6), # Floor tap 4
+            (1780.21, 4.92e6), # Floor tap 5
+            (1782.38, 5.28e6), # Ball retrieval scoop across net
+            (1784.05, 5.62e6), # Floor bounce
+            (1784.99, 2.30e7), # Adjacent court smash bleed
+            (1786.67, 1.59e7), # Adjacent court return bleed
+        ]
+        v_dur = 1812.0
+
+        # With default min_hits=5, exactly 1 rally (Point 1) is returned
+        rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=5)
+        self.assertEqual(len(rallies), 1, f"Expected exactly 1 rally, got {len(rallies)}")
+        p1 = rallies[0]
+        self.assertEqual(p1["hits"], 10)
+        self.assertAlmostEqual(p1["first_hit"], 1767.19, places=2)
+        self.assertAlmostEqual(p1["last_hit"], 1775.09, places=2)
+
+        # With min_hits=3, the 4-hit noise cluster would be admitted
+        rallies_lenient = extract_multi_shot_rallies(peaks, v_dur, min_hits=3)
+        self.assertEqual(len(rallies_lenient), 2)
 
     def test_preserve_high_clear_active_continuation(self):
         """
