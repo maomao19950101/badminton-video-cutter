@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
+from badminton_gui import THEMES
 from gui_engine import (
     CutterConfig,
     RallySegment,
@@ -184,6 +185,29 @@ class TestGuiEngine(unittest.TestCase):
         folder, disp = resolve_match_folder_name("/path/VID_20261029_203442_050.mp4", 1)
         self.assertEqual(folder, "01_场次一_双打实战_050")
         self.assertEqual(disp, "场次一_双打实战_050")
+
+    def test_codex_dark_and_light_themes(self):
+        self.assertIn("dark", THEMES)
+        self.assertIn("light", THEMES)
+        for mode in ("dark", "light"):
+            palette = THEMES[mode]
+            self.assertEqual(palette["accent_emerald"], "#10A37F")
+            for key in (
+                "bg_app",
+                "bg_header",
+                "bg_sidebar",
+                "bg_panel",
+                "bg_card",
+                "bg_well",
+                "border",
+                "fg_primary",
+                "fg_secondary",
+                "btn_primary_bg",
+                "btn_primary_fg",
+            ):
+                self.assertIn(key, palette)
+                self.assertTrue(palette[key].startswith("#"))
+        self.assertNotEqual(THEMES["dark"]["bg_panel"], THEMES["light"]["bg_panel"])
 
 
 if __name__ == "__main__":

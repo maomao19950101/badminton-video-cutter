@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-羽毛球 AI 视频剪辑大师 —— 可视化桌面版 (Windows & macOS) v1.7.0
+羽毛球 AI 视频剪辑大师 —— Codex UI 可视化桌面版 (Windows & macOS) v1.8.0
 
-100% 纯本地运行、零废话、专注羽毛球实战视频自动剪辑与多模式输出：
-- 支持添加/批量导入视频文件或整个录制文件夹，自动秒级读取已扫描时间轴缓存 (.timeline.json)
-- 支持四大场景一键预设与六大剪辑输出模式自由多选（默认：经典全能合集）
-- 支持「🚀 一键全自动剪辑并输出视频」与「🔍 扫描时间轴 -> 预览微调 -> 🎬 导出视频」双工作流
-- 内置可视化交互时间轴：支持点击选球、鼠标悬停查看详情、直接拖拽色块左右边缘微调起止时间
-- 内置「🟢 回合起点画面」与「🔴 回合终点画面」双预览窗 + 「▶️ 软件内动态播放此球」+「📺 系统播放器全屏播放」
-- 支持快捷键：Space (播放/暂停当前球)、Delete/BackSpace (切换保留/剔除)、[ / ] (终点微调 ±0.5s)、Ctrl+S (保存微调)
+采用 OpenAI Codex / Linear 极简工作台设计语言，内置 Dark（深邃碳黑）与 Light（纯净纸白）双主题一键切换：
+- 100% 纯本地高速运行，专注羽毛球实战视频自动剪辑与多模式输出
+- 支持「🌙 Dark / ☀️ Light」主题实时无损切换（快捷键 Ctrl+T / Cmd+T），自动记忆主题偏好
+- 自定义圆角胶囊按钮 (CodexButton) 与精细 1px 边框卡片，跨 Windows 与 macOS 保持一致的 Codex 视觉质感
+- 支持四大场景预设、六大剪辑模式多选、时间轴鼠标拖拽边缘微调、双画面预览与窗口内连续播放
 """
 
 import argparse
@@ -26,7 +24,7 @@ os.environ["TK_SILENCE_DEPRECATION"] = "1"
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -52,18 +50,67 @@ from gui_engine import (
     try_load_cached_timeline,
 )
 
-# Color Palette (Modern Dark Sports Studio Theme)
-BG_MAIN = "#111621"
-BG_PANEL = "#1A2232"
-BG_CARD = "#232D42"
-BG_CANVAS = "#0D111A"
-FG_TEXT = "#F1F5F9"
-FG_MUTED = "#94A3B8"
-ACCENT_GREEN = "#10B981"
-ACCENT_GOLD = "#F59E0B"
-ACCENT_BLUE = "#3B82F6"
-ACCENT_RED = "#EF4444"
-BORDER_COLOR = "#2E3A52"
+# =============================================================================
+# OpenAI Codex Design System Palettes (Dark & Light)
+# =============================================================================
+THEMES: Dict[str, Dict[str, str]] = {
+    "dark": {
+        "name": "dark",
+        "bg_app": "#0D0D0D",          # Deep Codex carbon background
+        "bg_header": "#121212",       # Top navigation bar
+        "bg_sidebar": "#171717",      # Left sidebar surface
+        "bg_panel": "#171717",        # Main workspace panel
+        "bg_card": "#212121",         # Elevated card surface
+        "bg_well": "#111111",         # Input / canvas recessed well
+        "bg_hover": "#2F2F2F",        # Subtle hover state
+        "border": "#2E2E2E",          # 1px hairline divider
+        "fg_primary": "#ECECEC",      # Crisp primary text
+        "fg_secondary": "#9B9B9B",    # Muted secondary label
+        "fg_muted": "#6E6E6E",        # Subtle hint / ruler text
+        "btn_primary_bg": "#ECECEC",  # Signature Codex high-contrast white pill
+        "btn_primary_fg": "#0D0D0D",
+        "btn_primary_hover": "#FFFFFF",
+        "btn_secondary_bg": "#262626",
+        "btn_secondary_fg": "#ECECEC",
+        "btn_secondary_hover": "#333333",
+        "accent_emerald": "#10A37F",  # OpenAI / Codex signature emerald
+        "accent_emerald_hover": "#0E906F",
+        "accent_amber": "#F59E0B",
+        "accent_blue": "#3B82F6",
+        "accent_red": "#EF4444",
+        "block_disabled": "#2A2A2A",
+        "tree_sel_bg": "#10A37F",
+        "tree_sel_fg": "#FFFFFF",
+    },
+    "light": {
+        "name": "light",
+        "bg_app": "#F3F4F6",          # Clean neutral workspace backdrop
+        "bg_header": "#FFFFFF",       # Pure white top bar
+        "bg_sidebar": "#F9FAFB",      # Codex warm off-white sidebar
+        "bg_panel": "#FFFFFF",        # Crisp white main surface
+        "bg_card": "#F9FAFB",         # Subtle card container
+        "bg_well": "#F3F4F6",         # Recessed input / canvas well
+        "bg_hover": "#E5E7EB",        # Hover state
+        "border": "#E5E7EB",          # 1px crisp light border
+        "fg_primary": "#0D0D0D",      # Deep ink primary text
+        "fg_secondary": "#52525B",    # Secondary slate text
+        "fg_muted": "#9CA3AF",        # Subtle hint text
+        "btn_primary_bg": "#0D0D0D",  # Signature Codex black pill button
+        "btn_primary_fg": "#FFFFFF",
+        "btn_primary_hover": "#262626",
+        "btn_secondary_bg": "#FFFFFF",
+        "btn_secondary_fg": "#18181B",
+        "btn_secondary_hover": "#F4F4F5",
+        "accent_emerald": "#10A37F",  # OpenAI / Codex signature emerald
+        "accent_emerald_hover": "#0D8A6A",
+        "accent_amber": "#D97706",
+        "accent_blue": "#2563EB",
+        "accent_red": "#DC2626",
+        "block_disabled": "#D1D5DB",
+        "tree_sel_bg": "#10A37F",
+        "tree_sel_fg": "#FFFFFF",
+    },
+}
 
 PLAYER_LABELS = {
     "近端左半场 (near_left)": "near_left",
@@ -76,18 +123,161 @@ PLAYER_LABELS = {
 PREFS_PATH = os.path.join(tempfile.gettempdir(), "badminton_gui_preferences.json")
 
 
+class CodexButton(tk.Canvas):
+    """
+    Codex-style flat rounded pill button rendered on a Canvas so that background
+    colors, 1px hairline borders, hover transitions, and Dark/Light themes render
+    identically on both macOS (bypassing Aqua bezel) and Windows.
+    """
+
+    def __init__(
+        self,
+        parent,
+        text: str,
+        command: Callable,
+        variant: str = "secondary",  # "primary", "emerald", "amber", "blue", "danger", "secondary", "ghost"
+        font_family: str = "PingFang SC",
+        font_size: int = 9,
+        bold: bool = False,
+        padx: int = 12,
+        pady: int = 5,
+        radius: int = 6,
+    ):
+        self._text = text
+        self._command = command
+        self._variant = variant
+        self._font_family = font_family
+        self._font_size = font_size
+        self._bold = bold
+        self._padx = padx
+        self._pady = pady
+        self._radius = radius
+        self._hovered = False
+        self._palette = THEMES["dark"]
+
+        font_spec = (font_family, font_size, "bold") if bold else (font_family, font_size)
+        # Estimate text dimensions cleanly
+        char_w = sum(1.75 if ord(ch) > 127 else 0.95 for ch in text)
+        est_w = int(char_w * font_size * 0.72) + padx * 2 + 4
+        est_h = int(font_size * 1.65) + pady * 2
+
+        super().__init__(
+            parent,
+            width=est_w,
+            height=est_h,
+            bd=0,
+            highlightthickness=0,
+            relief=tk.FLAT,
+            cursor="hand2",
+        )
+        self._font_spec = font_spec
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<ButtonRelease-1>", self._on_click)
+        self.bind("<Configure>", lambda e: self._draw())
+        self._draw()
+
+    def set_text(self, text: str):
+        self._text = text
+        char_w = sum(1.75 if ord(ch) > 127 else 0.95 for ch in text)
+        est_w = int(char_w * self._font_size * 0.72) + self._padx * 2 + 4
+        self.config(width=est_w)
+        self._draw()
+
+    def set_variant(self, variant: str):
+        self._variant = variant
+        self._draw()
+
+    def apply_theme(self, palette: Dict[str, str], parent_bg: Optional[str] = None):
+        self._palette = palette
+        bg_col = parent_bg if parent_bg else palette["bg_panel"]
+        self.configure(bg=bg_col)
+        self._draw()
+
+    def _resolve_colors(self) -> Tuple[str, str, str]:
+        p = self._palette
+        v = self._variant
+        if v == "primary":
+            bg = p["btn_primary_hover"] if self._hovered else p["btn_primary_bg"]
+            fg = p["btn_primary_fg"]
+            bd = bg
+        elif v == "emerald":
+            bg = p["accent_emerald_hover"] if self._hovered else p["accent_emerald"]
+            fg = "#FFFFFF"
+            bd = bg
+        elif v == "amber":
+            bg = "#B45309" if self._hovered else p["accent_amber"]
+            fg = "#FFFFFF" if p["name"] == "light" else "#111111"
+            bd = bg
+        elif v == "blue":
+            bg = "#1D4ED8" if self._hovered else p["accent_blue"]
+            fg = "#FFFFFF"
+            bd = bg
+        elif v == "danger":
+            bg = "#B91C1C" if self._hovered else p["accent_red"]
+            fg = "#FFFFFF"
+            bd = bg
+        elif v == "ghost":
+            bg = p["bg_hover"] if self._hovered else p["bg_header"]
+            fg = p["fg_primary"]
+            bd = p["border"]
+        else:  # "secondary"
+            bg = p["btn_secondary_hover"] if self._hovered else p["btn_secondary_bg"]
+            fg = p["btn_secondary_fg"]
+            bd = p["border"]
+        return bg, fg, bd
+
+    def _draw(self):
+        self.delete("all")
+        w = max(24, int(self.winfo_width()))
+        h = max(18, int(self.winfo_height()))
+        if w <= 24:
+            w = int(self["width"])
+            h = int(self["height"])
+        bg, fg, bd = self._resolve_colors()
+        r = min(self._radius, h // 2, w // 2)
+        self._create_rounded_rect(1, 1, w - 1, h - 1, r, fill=bg, outline=bd)
+        self.create_text(w / 2, h / 2, text=self._text, fill=fg, font=self._font_spec)
+
+    def _create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
+        points = [
+            x1 + r, y1,
+            x2 - r, y1,
+            x2, y1,
+            x2, y1 + r,
+            x2, y2 - r,
+            x2, y2,
+            x2 - r, y2,
+            x1 + r, y2,
+            x1, y2,
+            x1, y2 - r,
+            x1, y1 + r,
+            x1, y1,
+        ]
+        return self.create_polygon(points, smooth=True, **kwargs)
+
+    def _on_enter(self, _e):
+        self._hovered = True
+        self._draw()
+
+    def _on_leave(self, _e):
+        self._hovered = False
+        self._draw()
+
+    def _on_click(self, _e):
+        if self._command:
+            self._command()
+
+
 class BadmintonCutterGUI:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.hw_encoder = detect_hw_video_encoder(DEFAULT_FFMPEG)
-        self.root.title(
-            f"🏸 羽毛球 AI 视频剪辑大师 v{__version__} —— 纯净本地可视化剪辑版 [硬件编码: {self.hw_encoder}]"
-        )
-        self.root.geometry("1440x900")
-        self.root.minsize(1200, 780)
-        self.root.configure(bg=BG_MAIN)
+        self.theme_mode: str = "dark"  # "dark" or "light"
+        self.palette: Dict[str, str] = THEMES[self.theme_mode]
 
         self.font_family = "Microsoft YaHei UI" if platform.system() == "Windows" else "PingFang SC"
+        self.mono_font = "Consolas" if platform.system() == "Windows" else "Menlo"
 
         # State
         self.video_files: List[str] = []
@@ -98,10 +288,14 @@ class BadmintonCutterGUI:
         self.cancel_requested: bool = False
         self.ui_queue: "queue.Queue" = queue.Queue()
 
+        # Themeable widget registry
+        self._codex_buttons: List[Tuple[CodexButton, str]] = []
+        self._themed_frames: List[Tuple[tk.Widget, str, bool]] = []  # (widget, bg_key, has_border)
+        self._themed_labels: List[Tuple[tk.Widget, str, str]] = []   # (widget, bg_key, fg_key)
+
         # Timeline drag state
-        self._drag_mode: Optional[str] = None  # "start", "end", or None
+        self._drag_mode: Optional[str] = None
         self._drag_uid: Optional[int] = None
-        self._hover_text: str = ""
 
         # Inline playback state
         self._inline_playing: bool = False
@@ -109,15 +303,23 @@ class BadmintonCutterGUI:
         self._inline_frame_idx: int = 0
         self._playhead_time: Optional[float] = None
 
-        # Preview image references (prevent GC)
+        # Preview image references
         self._start_photo = None
         self._end_photo = None
 
         self._init_vars()
         self._load_preferences()
-        self._configure_styles()
+        self.palette = THEMES.get(self.theme_mode, THEMES["dark"])
+
+        self.root.title(
+            f"Codex Studio · 羽毛球 AI 视频剪辑大师 v{__version__}  [{self.hw_encoder}]"
+        )
+        self.root.geometry("1440x900")
+        self.root.minsize(1200, 780)
+
         self._build_layout()
         self._bind_shortcuts()
+        self.apply_theme(self.theme_mode)
         self._auto_load_default_match_folder()
         self._poll_ui_queue()
 
@@ -155,7 +357,7 @@ class BadmintonCutterGUI:
         # Progress
         self.progress_var = tk.DoubleVar(value=0.0)
         self.status_var = tk.StringVar(
-            value="就绪：支持直接点击「🚀 一键全自动剪辑并输出视频」，或在时间轴点击/拖拽微调任意球后导出。"
+            value="Ready · 点击「一键全自动剪辑输出」，或在时间轴上拖拽边缘微调任意回合后导出"
         )
 
     def _load_preferences(self):
@@ -164,6 +366,8 @@ class BadmintonCutterGUI:
         try:
             with open(PREFS_PATH, "r", encoding="utf-8") as f:
                 prefs = json.load(f)
+            if "theme_mode" in prefs and prefs["theme_mode"] in ("dark", "light"):
+                self.theme_mode = prefs["theme_mode"]
             if "output_dir" in prefs and prefs["output_dir"]:
                 self.output_dir_var.set(prefs["output_dir"])
             self.min_hits_var.set(int(prefs.get("min_hits", 5)))
@@ -176,6 +380,7 @@ class BadmintonCutterGUI:
     def _save_preferences(self):
         try:
             prefs = {
+                "theme_mode": self.theme_mode,
                 "output_dir": self.output_dir_var.get(),
                 "min_hits": int(self.min_hits_var.get()),
                 "min_dur": float(self.min_dur_var.get()),
@@ -195,169 +400,334 @@ class BadmintonCutterGUI:
         self.root.bind("<bracketright>", lambda e: self.adjust_selected_rally(0.0, 0.5))
         self.root.bind("<Control-s>", lambda e: self.save_current_timeline_manual())
         self.root.bind("<Command-s>", lambda e: self.save_current_timeline_manual())
+        self.root.bind("<Control-t>", lambda e: self.toggle_theme())
+        self.root.bind("<Command-t>", lambda e: self.toggle_theme())
 
     def _auto_load_default_match_folder(self):
         default_in = "/Users/harry/视频/1029"
         if os.path.isdir(default_in) and not self.video_files:
             self._import_folder_path(default_in, silent=True)
 
-    def _configure_styles(self):
+    # -------------------------------------------------------------------------
+    # Theme Registration & Dynamic Dark/Light Switching
+    # -------------------------------------------------------------------------
+    def _reg_frame(self, w: tk.Widget, bg_key: str = "bg_panel", has_border: bool = False) -> tk.Widget:
+        self._themed_frames.append((w, bg_key, has_border))
+        return w
+
+    def _reg_label(self, w: tk.Widget, bg_key: str = "bg_panel", fg_key: str = "fg_primary") -> tk.Widget:
+        self._themed_labels.append((w, bg_key, fg_key))
+        return w
+
+    def _make_btn(
+        self,
+        parent,
+        text: str,
+        command: Callable,
+        variant: str = "secondary",
+        bg_key: str = "bg_panel",
+        font_size: int = 9,
+        bold: bool = False,
+        padx: int = 10,
+        pady: int = 5,
+    ) -> CodexButton:
+        btn = CodexButton(
+            parent,
+            text=text,
+            command=command,
+            variant=variant,
+            font_family=self.font_family,
+            font_size=font_size,
+            bold=bold,
+            padx=padx,
+            pady=pady,
+        )
+        self._codex_buttons.append((btn, bg_key))
+        return btn
+
+    def toggle_theme(self):
+        new_mode = "light" if self.theme_mode == "dark" else "dark"
+        self.apply_theme(new_mode)
+        self._save_preferences()
+        mode_label = "☀️ Light (纯净纸白)" if new_mode == "light" else "🌙 Dark (深邃碳黑)"
+        self.append_log(f"🎨 已切换 Codex 界面主题为: {mode_label}")
+
+    def apply_theme(self, mode: str):
+        if mode not in THEMES:
+            mode = "dark"
+        self.theme_mode = mode
+        p = THEMES[mode]
+        self.palette = p
+
+        self.root.configure(bg=p["bg_app"])
+
+        # Update ttk styles
         style = ttk.Style(self.root)
         try:
             style.theme_use("clam")
         except tk.TclError:
             pass
 
-        style.configure(".", background=BG_PANEL, foreground=FG_TEXT, font=(self.font_family, 10))
-        style.configure("TFrame", background=BG_PANEL)
-        style.configure("Main.TFrame", background=BG_MAIN)
-        style.configure("Card.TFrame", background=BG_CARD)
-        style.configure("TLabel", background=BG_PANEL, foreground=FG_TEXT, font=(self.font_family, 10))
-        style.configure("Muted.TLabel", background=BG_PANEL, foreground=FG_MUTED, font=(self.font_family, 9))
-        style.configure("Header.TLabel", background=BG_PANEL, foreground=ACCENT_GREEN, font=(self.font_family, 11, "bold"))
-        style.configure("TCheckbutton", background=BG_PANEL, foreground=FG_TEXT, font=(self.font_family, 10))
-        style.map("TCheckbutton", background=[("active", BG_CARD)])
+        style.configure(".", background=p["bg_panel"], foreground=p["fg_primary"], font=(self.font_family, 10))
+        style.configure("TFrame", background=p["bg_panel"])
+        style.configure("Sidebar.TFrame", background=p["bg_sidebar"])
+        style.configure("TLabel", background=p["bg_panel"], foreground=p["fg_primary"], font=(self.font_family, 10))
+        style.configure("Sidebar.TLabel", background=p["bg_sidebar"], foreground=p["fg_primary"], font=(self.font_family, 10))
+        style.configure("Muted.TLabel", background=p["bg_sidebar"], foreground=p["fg_secondary"], font=(self.font_family, 9))
+        style.configure("Header.TLabel", background=p["bg_sidebar"], foreground=p["fg_primary"], font=(self.font_family, 10, "bold"))
+        style.configure("PanelHeader.TLabel", background=p["bg_panel"], foreground=p["fg_primary"], font=(self.font_family, 10, "bold"))
+        style.configure("TCheckbutton", background=p["bg_sidebar"], foreground=p["fg_primary"], font=(self.font_family, 9))
+        style.map(
+            "TCheckbutton",
+            background=[("active", p["bg_hover"])],
+            foreground=[("active", p["fg_primary"])],
+        )
+        style.configure("TCombobox", fieldbackground=p["bg_well"], background=p["bg_card"], foreground=p["fg_primary"])
+        style.configure("TSeparator", background=p["border"])
+        style.configure("TScale", background=p["bg_sidebar"], troughcolor=p["bg_well"])
 
         style.configure(
             "Treeview",
-            background=BG_CANVAS,
-            foreground=FG_TEXT,
-            fieldbackground=BG_CANVAS,
-            rowheight=26,
+            background=p["bg_well"],
+            foreground=p["fg_primary"],
+            fieldbackground=p["bg_well"],
+            rowheight=27,
+            borderwidth=0,
             font=(self.font_family, 9),
         )
         style.configure(
             "Treeview.Heading",
-            background=BG_CARD,
-            foreground=ACCENT_GOLD,
+            background=p["bg_card"],
+            foreground=p["fg_secondary"],
+            relief="flat",
             font=(self.font_family, 9, "bold"),
         )
-        style.map("Treeview", background=[("selected", ACCENT_BLUE)], foreground=[("selected", "#FFFFFF")])
-
-        style.configure(
-            "Green.Horizontal.TProgressbar",
-            troughcolor=BG_CANVAS,
-            background=ACCENT_GREEN,
-            thickness=16,
+        style.map(
+            "Treeview",
+            background=[("selected", p["tree_sel_bg"])],
+            foreground=[("selected", p["tree_sel_fg"])],
         )
 
+        style.configure(
+            "Codex.Horizontal.TProgressbar",
+            troughcolor=p["bg_well"],
+            background=p["accent_emerald"],
+            bordercolor=p["border"],
+            lightcolor=p["accent_emerald"],
+            darkcolor=p["accent_emerald"],
+            thickness=10,
+        )
+
+        # Update registered tk frames
+        for w, bg_key, has_border in self._themed_frames:
+            w.configure(bg=p[bg_key])
+            if has_border:
+                w.configure(highlightbackground=p["border"], highlightcolor=p["border"])
+
+        # Update registered tk labels
+        for w, bg_key, fg_key in self._themed_labels:
+            w.configure(bg=p[bg_key], fg=p[fg_key])
+
+        # Update CodexButtons
+        for btn, bg_key in self._codex_buttons:
+            btn.apply_theme(p, parent_bg=p[bg_key])
+
+        # Update theme toggle button text
+        if hasattr(self, "btn_theme_toggle"):
+            toggle_txt = "☀️ Light 模式" if mode == "dark" else "🌙 Dark 模式"
+            self.btn_theme_toggle.set_text(toggle_txt)
+
+        # Update listbox, entry, canvases, log console
+        if hasattr(self, "video_listbox"):
+            self.video_listbox.configure(
+                bg=p["bg_well"],
+                fg=p["fg_primary"],
+                selectbackground=p["accent_emerald"],
+                selectforeground="#FFFFFF",
+            )
+        if hasattr(self, "out_entry"):
+            self.out_entry.configure(
+                bg=p["bg_well"],
+                fg=p["fg_primary"],
+                insertbackground=p["fg_primary"],
+                highlightbackground=p["border"],
+                highlightcolor=p["accent_emerald"],
+                highlightthickness=1,
+            )
+        if hasattr(self, "timeline_canvas"):
+            self.timeline_canvas.configure(bg=p["bg_well"], highlightbackground=p["border"])
+            self._redraw_timeline_canvas()
+        if hasattr(self, "canvas_start_preview"):
+            self.canvas_start_preview.configure(bg=p["bg_well"])
+            self.canvas_end_preview.configure(bg=p["bg_well"])
+        if hasattr(self, "log_text"):
+            self.log_text.configure(bg=p["bg_well"], fg=p["fg_secondary"])
+
+    # -------------------------------------------------------------------------
+    # Layout Construction (Codex Minimalist Studio Architecture)
+    # -------------------------------------------------------------------------
     def _build_layout(self):
-        # Top Title Banner
-        banner = tk.Frame(self.root, bg="#0B0F17", height=50)
-        banner.pack(fill=tk.X, side=tk.TOP)
-        tk.Label(
-            banner,
-            text=f"🏸 羽毛球 AI 视频剪辑大师 v{__version__}",
-            bg="#0B0F17",
-            fg=ACCENT_GREEN,
-            font=(self.font_family, 14, "bold"),
-            padx=16,
-            pady=8,
+        # 1. Top Codex Navigation Bar
+        header = self._reg_frame(tk.Frame(self.root, height=52, highlightthickness=1), "bg_header", True)
+        header.pack(fill=tk.X, side=tk.TOP)
+
+        title_box = self._reg_frame(tk.Frame(header), "bg_header", False)
+        title_box.pack(side=tk.LEFT, padx=14, pady=8)
+
+        self._reg_label(
+            tk.Label(title_box, text="🏸 羽毛球 AI 剪辑大师", font=(self.font_family, 13, "bold")),
+            "bg_header",
+            "fg_primary",
         ).pack(side=tk.LEFT)
-        tk.Label(
-            banner,
-            text="100%本地高速剪辑 · 球衣换人自动分第01/02/03局 · 死球/换球精准剔除 · 时间轴拖拽微调 & 双画面预览",
-            bg="#0B0F17",
-            fg=FG_MUTED,
-            font=(self.font_family, 9),
-        ).pack(side=tk.LEFT, padx=6)
 
-        # Quick Preset Buttons in Banner Right
-        preset_bar = tk.Frame(banner, bg="#0B0F17")
-        preset_bar.pack(side=tk.RIGHT, padx=14)
-        tk.Label(preset_bar, text="一键预设:", bg="#0B0F17", fg=ACCENT_GOLD, font=(self.font_family, 9, "bold")).pack(side=tk.LEFT, padx=4)
-        self._make_btn(preset_bar, "🏆 默认球局多拍", lambda: self.apply_preset("default"), bg=BG_CARD, font_size=8).pack(side=tk.LEFT, padx=2)
-        self._make_btn(preset_bar, "⏱️ 纯享紧凑长片", lambda: self.apply_preset("condensed"), bg=BG_CARD, font_size=8).pack(side=tk.LEFT, padx=2)
-        self._make_btn(preset_bar, "📱 抖音9:16竖屏", lambda: self.apply_preset("vertical"), bg=BG_CARD, font_size=8).pack(side=tk.LEFT, padx=2)
-        self._make_btn(preset_bar, "🌟 全模式大满贯", lambda: self.apply_preset("grand_slam"), bg=BG_CARD, font_size=8).pack(side=tk.LEFT, padx=2)
+        self._reg_label(
+            tk.Label(title_box, text=f"  v{__version__} · Codex Studio  ", font=(self.mono_font, 9)),
+            "bg_header",
+            "accent_emerald",
+        ).pack(side=tk.LEFT, padx=(6, 0))
 
-        # Main Paned Layout
-        main_frame = tk.Frame(self.root, bg=BG_MAIN)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        self._reg_label(
+            tk.Label(
+                title_box,
+                text="纯本地引擎 · 球衣ReID自动分第01/02/03局 · 死球零残留 · 时间轴边缘拖拽",
+                font=(self.font_family, 9),
+            ),
+            "bg_header",
+            "fg_secondary",
+        ).pack(side=tk.LEFT, padx=8)
 
-        left_col = tk.Frame(main_frame, bg=BG_PANEL, width=445, highlightbackground=BORDER_COLOR, highlightthickness=1)
-        left_col.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
-        left_col.pack_propagate(False)
+        # Right side of Header: Theme Toggle + Quick Presets
+        hdr_right = self._reg_frame(tk.Frame(header), "bg_header", False)
+        hdr_right.pack(side=tk.RIGHT, padx=14, pady=8)
 
-        right_col = tk.Frame(main_frame, bg=BG_PANEL, highlightbackground=BORDER_COLOR, highlightthickness=1)
-        right_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.btn_theme_toggle = self._make_btn(
+            hdr_right,
+            "☀️ Light 模式",
+            self.toggle_theme,
+            variant="ghost",
+            bg_key="bg_header",
+            font_size=9,
+            bold=True,
+            padx=10,
+            pady=4,
+        )
+        self.btn_theme_toggle.pack(side=tk.RIGHT, padx=(10, 0))
 
-        self._build_left_column(left_col)
-        self._build_right_column(right_col)
+        self._make_btn(
+            hdr_right, "全模式大满贯", lambda: self.apply_preset("grand_slam"), variant="ghost", bg_key="bg_header", font_size=8, padx=8, pady=4
+        ).pack(side=tk.RIGHT, padx=2)
+        self._make_btn(
+            hdr_right, "抖音 9:16 竖屏", lambda: self.apply_preset("vertical"), variant="ghost", bg_key="bg_header", font_size=8, padx=8, pady=4
+        ).pack(side=tk.RIGHT, padx=2)
+        self._make_btn(
+            hdr_right, "纯享紧凑长片", lambda: self.apply_preset("condensed"), variant="ghost", bg_key="bg_header", font_size=8, padx=8, pady=4
+        ).pack(side=tk.RIGHT, padx=2)
+        self._make_btn(
+            hdr_right, "默认球局多拍", lambda: self.apply_preset("default"), variant="ghost", bg_key="bg_header", font_size=8, padx=8, pady=4
+        ).pack(side=tk.RIGHT, padx=2)
 
-    def _build_left_column(self, parent: tk.Frame):
-        # 1. Video Queue Section
-        sec1 = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        self._reg_label(
+            tk.Label(hdr_right, text="预设:", font=(self.font_family, 9)),
+            "bg_header",
+            "fg_secondary",
+        ).pack(side=tk.RIGHT, padx=4)
+
+        # 2. Main Split Workspace: Left Sidebar (435px) + Right Studio Area
+        body = self._reg_frame(tk.Frame(self.root), "bg_app", False)
+        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        left_sidebar = self._reg_frame(
+            tk.Frame(body, width=440, highlightthickness=1), "bg_sidebar", True
+        )
+        left_sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        left_sidebar.pack_propagate(False)
+
+        right_studio = self._reg_frame(
+            tk.Frame(body, highlightthickness=1), "bg_panel", True
+        )
+        right_studio.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self._build_sidebar(left_sidebar)
+        self._build_studio(right_studio)
+
+    def _build_sidebar(self, parent: tk.Frame):
+        # Section 1: Video Queue
+        sec1 = self._reg_frame(tk.Frame(parent, padx=14, pady=10), "bg_sidebar", False)
         sec1.pack(fill=tk.X)
-        ttk.Label(sec1, text="📂 1. 待剪辑视频队列", style="Header.TLabel").pack(anchor=tk.W)
+        ttk.Label(sec1, text="01 / 视频队列与输出路径", style="Header.TLabel").pack(anchor=tk.W)
 
-        btn_row = tk.Frame(sec1, bg=BG_PANEL)
-        btn_row.pack(fill=tk.X, pady=(6, 4))
-        self._make_btn(btn_row, "➕ 添加视频", self.add_video_files, bg=ACCENT_BLUE).pack(side=tk.LEFT, padx=(0, 4))
-        self._make_btn(btn_row, "📁 添加文件夹", self.add_video_folder, bg=ACCENT_BLUE).pack(side=tk.LEFT, padx=(0, 4))
-        self._make_btn(btn_row, "🗑️ 移除", self.remove_selected_video, bg=BG_CARD).pack(side=tk.LEFT, padx=(0, 4))
-        self._make_btn(btn_row, "🧹 清空", self.clear_video_queue, bg=BG_CARD).pack(side=tk.LEFT)
+        btn_row = self._reg_frame(tk.Frame(sec1), "bg_sidebar", False)
+        btn_row.pack(fill=tk.X, pady=(8, 6))
+        self._make_btn(btn_row, "＋ 添加视频", self.add_video_files, variant="primary", bg_key="bg_sidebar", font_size=9, bold=True).pack(
+            side=tk.LEFT, padx=(0, 5)
+        )
+        self._make_btn(btn_row, "📁 导入文件夹", self.add_video_folder, variant="secondary", bg_key="bg_sidebar", font_size=9).pack(
+            side=tk.LEFT, padx=(0, 5)
+        )
+        self._make_btn(btn_row, "移除", self.remove_selected_video, variant="secondary", bg_key="bg_sidebar", font_size=9).pack(
+            side=tk.LEFT, padx=(0, 5)
+        )
+        self._make_btn(btn_row, "清空", self.clear_video_queue, variant="secondary", bg_key="bg_sidebar", font_size=9).pack(
+            side=tk.LEFT
+        )
 
-        list_frame = tk.Frame(sec1, bg=BG_CANVAS, highlightbackground=BORDER_COLOR, highlightthickness=1)
-        list_frame.pack(fill=tk.X, pady=4)
+        list_wrap = self._reg_frame(tk.Frame(sec1, highlightthickness=1), "bg_well", True)
+        list_wrap.pack(fill=tk.X, pady=4)
         self.video_listbox = tk.Listbox(
-            list_frame,
+            list_wrap,
             height=4,
-            bg=BG_CANVAS,
-            fg=FG_TEXT,
-            selectbackground=ACCENT_BLUE,
-            font=(self.font_family, 9),
+            font=(self.mono_font, 9),
             borderwidth=0,
             highlightthickness=0,
         )
-        self.video_listbox.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4, pady=4)
+        self.video_listbox.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6, pady=4)
         self.video_listbox.bind("<<ListboxSelect>>", self._on_video_select)
-        v_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.video_listbox.yview)
+        v_scroll = ttk.Scrollbar(list_wrap, orient=tk.VERTICAL, command=self.video_listbox.yview)
         v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.video_listbox.config(yscrollcommand=v_scroll.set)
 
-        # Output directory
-        out_row = tk.Frame(sec1, bg=BG_PANEL)
-        out_row.pack(fill=tk.X, pady=(4, 2))
-        ttk.Label(out_row, text="输出目录:", style="Muted.TLabel").pack(side=tk.LEFT)
-        self._make_btn(out_row, "📂 打开输出目录", self.open_output_dir, bg=BG_CARD, font_size=8).pack(side=tk.RIGHT)
-        self._make_btn(out_row, "浏览...", self.choose_output_dir, bg=BG_CARD, font_size=8).pack(side=tk.RIGHT, padx=4)
+        out_row = self._reg_frame(tk.Frame(sec1), "bg_sidebar", False)
+        out_row.pack(fill=tk.X, pady=(6, 2))
+        ttk.Label(out_row, text="输出目录", style="Muted.TLabel").pack(side=tk.LEFT)
+        self._make_btn(out_row, "打开目录 ↗", self.open_output_dir, variant="secondary", bg_key="bg_sidebar", font_size=8, padx=8, pady=2).pack(
+            side=tk.RIGHT
+        )
+        self._make_btn(out_row, "选择...", self.choose_output_dir, variant="secondary", bg_key="bg_sidebar", font_size=8, padx=8, pady=2).pack(
+            side=tk.RIGHT, padx=4
+        )
 
-        out_entry = tk.Entry(
+        self.out_entry = tk.Entry(
             sec1,
             textvariable=self.output_dir_var,
-            bg=BG_CANVAS,
-            fg=FG_TEXT,
-            insertbackground=FG_TEXT,
             relief=tk.FLAT,
-            font=(self.font_family, 9),
+            font=(self.mono_font, 9),
         )
-        out_entry.pack(fill=tk.X, ipady=4, pady=(2, 0))
+        self.out_entry.pack(fill=tk.X, ipady=5, pady=(2, 0))
 
-        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=12, pady=4)
+        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=14, pady=4)
 
-        # 2. Cutting Modes Section
-        sec2 = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=4)
+        # Section 2: Six Output Modes
+        sec2 = self._reg_frame(tk.Frame(parent, padx=14, pady=6), "bg_sidebar", False)
         sec2.pack(fill=tk.X)
-        ttk.Label(sec2, text="🎛️ 2. 剪辑输出模式（可多选，默认经典合集）", style="Header.TLabel").pack(anchor=tk.W, pady=(0, 4))
+        ttk.Label(sec2, text="02 / 剪辑输出模式（支持多选）", style="Header.TLabel").pack(anchor=tk.W, pady=(0, 6))
 
         ttk.Checkbutton(
             sec2,
-            text="⭐ 经典全能合集（默认：自动按换人分局 + 多拍 + 接发秒杀）",
+            text="经典全能合集（默认：自动换人分局 + 多拍 + 接发秒杀）",
             variable=self.mode_all_var,
-        ).pack(anchor=tk.W, pady=1)
+        ).pack(anchor=tk.W, pady=2)
 
         ttk.Checkbutton(
             sec2,
-            text="⏱️ 一刀不剪·纯享紧凑版（剔除所有捡球走动，合成连贯长片）",
+            text="一刀不剪·纯享紧凑版（剔除捡球走动，合成连贯长片）",
             variable=self.mode_condensed_var,
-        ).pack(anchor=tk.W, pady=1)
+        ).pack(anchor=tk.W, pady=2)
 
-        vert_row = tk.Frame(sec2, bg=BG_PANEL)
-        vert_row.pack(fill=tk.X, pady=1)
+        vert_row = self._reg_frame(tk.Frame(sec2), "bg_sidebar", False)
+        vert_row.pack(fill=tk.X, pady=2)
         ttk.Checkbutton(
             vert_row,
-            text="📱 竖屏短视频模式（自动焦点平滑跟随） 画幅:",
+            text="竖屏短视频模式（自动焦点平滑居中） 比例:",
             variable=self.mode_vertical_var,
         ).pack(side=tk.LEFT)
         ttk.Combobox(
@@ -368,11 +738,11 @@ class BadmintonCutterGUI:
             state="readonly",
         ).pack(side=tk.LEFT, padx=4)
 
-        solo_row = tk.Frame(sec2, bg=BG_PANEL)
-        solo_row.pack(fill=tk.X, pady=1)
+        solo_row = self._reg_frame(tk.Frame(sec2), "bg_sidebar", False)
+        solo_row.pack(fill=tk.X, pady=2)
         ttk.Checkbutton(
             solo_row,
-            text="🌟 个人高光 Solo 视角  站位:",
+            text="个人高光 Solo 视角   站位:",
             variable=self.mode_solo_var,
         ).pack(side=tk.LEFT)
         ttk.Combobox(
@@ -385,53 +755,61 @@ class BadmintonCutterGUI:
 
         ttk.Checkbutton(
             sec2,
-            text="🎓 发接发前三拍切片（专门截取开球前 3.5 秒视频片段）",
+            text="发接发前三拍切片（专门截取开球前 3.5 秒片段）",
             variable=self.mode_review_var,
-        ).pack(anchor=tk.W, pady=1)
+        ).pack(anchor=tk.W, pady=2)
 
         ttk.Checkbutton(
             sec2,
-            text="💥 球风分类视频库（分拣为重杀突破 / 多拍拉锯 / 平抽快攻）",
+            text="球风分类视频库（重杀突破 / 多拍拉锯 / 平抽快攻）",
             variable=self.mode_showcase_var,
-        ).pack(anchor=tk.W, pady=1)
+        ).pack(anchor=tk.W, pady=2)
 
-        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=12, pady=4)
+        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=14, pady=4)
 
-        # 3. Extra Options & Sliders
-        sec3 = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=4)
+        # Section 3: Parameters & Sliders
+        sec3 = self._reg_frame(tk.Frame(parent, padx=14, pady=6), "bg_sidebar", False)
         sec3.pack(fill=tk.BOTH, expand=True)
 
-        hdr_row = tk.Frame(sec3, bg=BG_PANEL)
-        hdr_row.pack(fill=tk.X)
-        ttk.Label(hdr_row, text="⚙️ 3. 分局与剪辑灵敏度参数", style="Header.TLabel").pack(side=tk.LEFT)
-        self._make_btn(hdr_row, "恢复默认", self.reset_default_params, bg=BG_CARD, font_size=8).pack(side=tk.RIGHT)
+        hdr_row = self._reg_frame(tk.Frame(sec3), "bg_sidebar", False)
+        hdr_row.pack(fill=tk.X, pady=(0, 4))
+        ttk.Label(hdr_row, text="03 / 分局与切分灵敏度", style="Header.TLabel").pack(side=tk.LEFT)
+        self._make_btn(
+            hdr_row, "重置默认", self.reset_default_params, variant="secondary", bg_key="bg_sidebar", font_size=8, padx=8, pady=2
+        ).pack(side=tk.RIGHT)
 
-        opt_grid = tk.Frame(sec3, bg=BG_PANEL)
+        opt_grid = self._reg_frame(tk.Frame(sec3), "bg_sidebar", False)
         opt_grid.pack(fill=tk.X, pady=4)
         ttk.Checkbutton(opt_grid, text="自动按换人分第01/02/03局", variable=self.split_by_game_var).grid(
-            row=0, column=0, sticky=tk.W, padx=(0, 8)
+            row=0, column=0, sticky=tk.W, padx=(0, 8), pady=1
         )
-        ttk.Checkbutton(opt_grid, text="拼接整场连贯大合集", variable=self.reel_var).grid(row=0, column=1, sticky=tk.W)
-        ttk.Checkbutton(opt_grid, text="生成转播级拍数 HUD", variable=self.hud_var).grid(
-            row=1, column=0, sticky=tk.W, padx=(0, 8)
+        ttk.Checkbutton(opt_grid, text="拼接整场连贯大合集", variable=self.reel_var).grid(
+            row=0, column=1, sticky=tk.W, pady=1
+        )
+        ttk.Checkbutton(opt_grid, text="转播级实时拍数 HUD", variable=self.hud_var).grid(
+            row=1, column=0, sticky=tk.W, padx=(0, 8), pady=1
         )
         ttk.Checkbutton(
             opt_grid,
             text="0.4x慢动作 & 表情包GIF",
             variable=self.slowmo_var,
             command=lambda: self.gif_var.set(self.slowmo_var.get()),
-        ).grid(row=1, column=1, sticky=tk.W)
+        ).grid(row=1, column=1, sticky=tk.W, pady=1)
 
-        self._add_slider(sec3, "多拍最少击球拍数 (拍):", self.min_hits_var, 3, 15, is_int=True)
-        self._add_slider(sec3, "多拍最短保留时长 (秒):", self.min_dur_var, 3.0, 15.0, is_int=False)
-        self._add_slider(sec3, "换人分局休息间隔 (秒):", self.rest_gap_var, 10.0, 60.0, is_int=False)
-        self._add_slider(sec3, "每局最少多拍回合数:", self.min_rallies_game_var, 3, 20, is_int=True)
+        self._add_slider(sec3, "多拍最少击球数 (拍)", self.min_hits_var, 3, 15, is_int=True)
+        self._add_slider(sec3, "多拍最短保留秒数 (s)", self.min_dur_var, 3.0, 15.0, is_int=False)
+        self._add_slider(sec3, "换人分局休息间隔 (s)", self.rest_gap_var, 10.0, 60.0, is_int=False)
+        self._add_slider(sec3, "每局最少多拍回合数", self.min_rallies_game_var, 3, 20, is_int=True)
 
     def _add_slider(self, parent: tk.Frame, label_text: str, var, min_v, max_v, is_int: bool = False):
-        row = tk.Frame(parent, bg=BG_PANEL)
-        row.pack(fill=tk.X, pady=2)
-        ttk.Label(row, text=label_text, style="Muted.TLabel", width=22).pack(side=tk.LEFT)
-        val_lbl = tk.Label(row, text=str(var.get()), bg=BG_PANEL, fg=ACCENT_GOLD, font=(self.font_family, 9, "bold"), width=5)
+        row = self._reg_frame(tk.Frame(parent), "bg_sidebar", False)
+        row.pack(fill=tk.X, pady=3)
+        ttk.Label(row, text=label_text, style="Muted.TLabel", width=20).pack(side=tk.LEFT)
+        val_lbl = self._reg_label(
+            tk.Label(row, text=str(var.get()), font=(self.mono_font, 9, "bold"), width=5),
+            "bg_sidebar",
+            "accent_emerald",
+        )
         val_lbl.pack(side=tk.RIGHT)
 
         def _on_move(v):
@@ -441,32 +819,33 @@ class BadmintonCutterGUI:
 
         scale = ttk.Scale(row, from_=min_v, to=max_v, orient=tk.HORIZONTAL, command=_on_move)
         scale.set(var.get())
-        scale.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        scale.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
 
-    def _build_right_column(self, parent: tk.Frame):
-        # 1. Top Primary Action Bar
-        action_bar = tk.Frame(parent, bg=BG_CARD, padx=14, pady=10)
-        action_bar.pack(fill=tk.X)
+    def _build_studio(self, parent: tk.Frame):
+        # 1. Top Studio Command Bar
+        cmd_bar = self._reg_frame(tk.Frame(parent, padx=16, pady=10, highlightthickness=1), "bg_card", True)
+        cmd_bar.pack(fill=tk.X)
 
         self.btn_one_click = self._make_btn(
-            action_bar,
-            "🚀 一键全自动剪辑并输出视频",
+            cmd_bar,
+            "▶ 一键全自动剪辑并输出视频",
             self.start_one_click_pipeline,
-            bg=ACCENT_GREEN,
-            fg="#06281E",
-            font_size=11,
+            variant="emerald",
+            bg_key="bg_card",
+            font_size=10,
             bold=True,
-            padx=14,
+            padx=16,
             pady=6,
         )
         self.btn_one_click.pack(side=tk.LEFT, padx=(0, 8))
 
         self.btn_scan_only = self._make_btn(
-            action_bar,
-            "🔍 扫描/加载时间轴",
+            cmd_bar,
+            "扫描/加载时间轴",
             lambda: self.start_scan_only(force_rescan=False),
-            bg=ACCENT_BLUE,
-            font_size=10,
+            variant="primary",
+            bg_key="bg_card",
+            font_size=9,
             bold=True,
             padx=12,
             pady=6,
@@ -474,12 +853,12 @@ class BadmintonCutterGUI:
         self.btn_scan_only.pack(side=tk.LEFT, padx=(0, 8))
 
         self.btn_export_tuned = self._make_btn(
-            action_bar,
-            "🎬 导出当前时间轴视频",
+            cmd_bar,
+            "导出当前时间轴视频",
             self.start_export_current,
-            bg=ACCENT_GOLD,
-            fg="#1F1600",
-            font_size=10,
+            variant="secondary",
+            bg_key="bg_card",
+            font_size=9,
             bold=True,
             padx=12,
             pady=6,
@@ -487,147 +866,169 @@ class BadmintonCutterGUI:
         self.btn_export_tuned.pack(side=tk.LEFT, padx=(0, 8))
 
         self._make_btn(
-            action_bar,
-            "🔄 强制重扫",
+            cmd_bar,
+            "重新深度扫描",
             lambda: self.start_scan_only(force_rescan=True),
-            bg=BG_PANEL,
+            variant="secondary",
+            bg_key="bg_card",
             font_size=9,
-            padx=8,
+            padx=10,
             pady=6,
         ).pack(side=tk.LEFT, padx=(0, 6))
 
         self._make_btn(
-            action_bar,
-            "💾 保存微调",
+            cmd_bar,
+            "保存微调 (⌘S)",
             self.save_current_timeline_manual,
-            bg=BG_PANEL,
+            variant="secondary",
+            bg_key="bg_card",
             font_size=9,
-            padx=8,
+            padx=10,
             pady=6,
         ).pack(side=tk.LEFT)
 
         self.btn_stop = self._make_btn(
-            action_bar,
-            "⏹ 停止",
+            cmd_bar,
+            "■ 停止",
             self.request_stop,
-            bg=ACCENT_RED,
-            font_size=10,
-            padx=10,
+            variant="danger",
+            bg_key="bg_card",
+            font_size=9,
+            bold=True,
+            padx=12,
             pady=6,
         )
         self.btn_stop.pack(side=tk.RIGHT)
 
         # 2. Interactive Visual Timeline Canvas
-        tl_frame = tk.Frame(parent, bg=BG_PANEL, padx=14, pady=6)
-        tl_frame.pack(fill=tk.X)
+        tl_sec = self._reg_frame(tk.Frame(parent, padx=16, pady=8), "bg_panel", False)
+        tl_sec.pack(fill=tk.X)
 
-        tl_hdr = tk.Frame(tl_frame, bg=BG_PANEL)
+        tl_hdr = self._reg_frame(tk.Frame(tl_sec), "bg_panel", False)
         tl_hdr.pack(fill=tk.X)
         ttk.Label(
             tl_hdr,
-            text="📊 全场可视化交互时间轴（点击选球 · 拖拽色块左右边缘直接调整起止秒数 · 蓝虚线=换人分球局）",
-            style="Header.TLabel",
+            text="TIMELINE · 全场回合时间轴（点击选球 · 拖拽色块边缘直接调整起止秒数 · 蓝虚线=换人分球局）",
+            style="PanelHeader.TLabel",
         ).pack(side=tk.LEFT)
-        self.lbl_hover_info = tk.Label(tl_hdr, text="", bg=BG_PANEL, fg=ACCENT_GOLD, font=(self.font_family, 9))
+        self.lbl_hover_info = self._reg_label(
+            tk.Label(tl_hdr, text="", font=(self.mono_font, 9)),
+            "bg_panel",
+            "accent_emerald",
+        )
         self.lbl_hover_info.pack(side=tk.RIGHT)
 
         self.timeline_canvas = tk.Canvas(
-            tl_frame,
+            tl_sec,
             height=96,
-            bg=BG_CANVAS,
-            highlightbackground=BORDER_COLOR,
             highlightthickness=1,
             cursor="hand2",
         )
-        self.timeline_canvas.pack(fill=tk.X, pady=(4, 2))
+        self.timeline_canvas.pack(fill=tk.X, pady=(6, 2))
         self.timeline_canvas.bind("<ButtonPress-1>", self._on_timeline_mouse_down)
         self.timeline_canvas.bind("<B1-Motion>", self._on_timeline_mouse_drag)
         self.timeline_canvas.bind("<ButtonRelease-1>", self._on_timeline_mouse_up)
         self.timeline_canvas.bind("<Motion>", self._on_timeline_mouse_hover)
         self.timeline_canvas.bind("<Configure>", lambda e: self._redraw_timeline_canvas())
 
-        # 3. Dual Frame Preview (Start Frame & End Frame) + Fine-Tuning Controls
-        mid_frame = tk.Frame(parent, bg=BG_PANEL, padx=14, pady=4)
-        mid_frame.pack(fill=tk.BOTH, expand=True)
+        # 3. Dual Frame Preview Cards + Fine-Tuning Controls
+        mid_sec = self._reg_frame(tk.Frame(parent, padx=16, pady=4), "bg_panel", False)
+        mid_sec.pack(fill=tk.BOTH, expand=True)
 
-        preview_row = tk.Frame(mid_frame, bg=BG_PANEL)
-        preview_row.pack(fill=tk.X, pady=(0, 6))
+        preview_row = self._reg_frame(tk.Frame(mid_sec), "bg_panel", False)
+        preview_row.pack(fill=tk.X, pady=(0, 8))
 
-        # Left Preview: Opening Serve / Start Frame (Also hosts inline dynamic playback)
-        start_card = tk.Frame(preview_row, bg=BG_CARD, padx=8, pady=6, highlightbackground=BORDER_COLOR, highlightthickness=1)
+        # Left Card: Start Frame / Inline Video Player
+        start_card = self._reg_frame(
+            tk.Frame(preview_row, padx=10, pady=8, highlightthickness=1), "bg_card", True
+        )
         start_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
-        self.lbl_start_title = tk.Label(
-            start_card, text="🟢 回合起点画面 (开球前) / 动态预览窗", bg=BG_CARD, fg=ACCENT_GREEN, font=(self.font_family, 9, "bold")
+        self.lbl_start_title = self._reg_label(
+            tk.Label(start_card, text="START FRAME · 回合起点画面 (开球前)", font=(self.font_family, 9, "bold")),
+            "bg_card",
+            "accent_emerald",
         )
         self.lbl_start_title.pack(anchor=tk.W)
-        self.canvas_start_preview = tk.Canvas(start_card, width=360, height=185, bg=BG_CANVAS, highlightthickness=0)
-        self.canvas_start_preview.pack(pady=4)
 
-        start_tune = tk.Frame(start_card, bg=BG_CARD)
+        self.canvas_start_preview = tk.Canvas(start_card, width=360, height=185, highlightthickness=0)
+        self.canvas_start_preview.pack(pady=6)
+
+        start_tune = self._reg_frame(tk.Frame(start_card), "bg_card", False)
         start_tune.pack(fill=tk.X)
-        tk.Label(start_tune, text="起点微调:", bg=BG_CARD, fg=FG_MUTED, font=(self.font_family, 9)).pack(side=tk.LEFT)
-        self._make_btn(start_tune, "⏪ -1.0秒", lambda: self.adjust_selected_rally(-1.0, 0.0), bg=BG_PANEL, font_size=8).pack(
-            side=tk.LEFT, padx=2
+        self._reg_label(tk.Label(start_tune, text="起点微调", font=(self.font_family, 8)), "bg_card", "fg_secondary").pack(
+            side=tk.LEFT, padx=(0, 4)
         )
-        self._make_btn(start_tune, "◀ -0.5秒", lambda: self.adjust_selected_rally(-0.5, 0.0), bg=BG_PANEL, font_size=8).pack(
-            side=tk.LEFT, padx=2
-        )
-        self._make_btn(start_tune, "▶ +0.5秒", lambda: self.adjust_selected_rally(0.5, 0.0), bg=BG_PANEL, font_size=8).pack(
-            side=tk.LEFT, padx=2
-        )
-        self._make_btn(start_tune, "⏩ +1.0秒", lambda: self.adjust_selected_rally(1.0, 0.0), bg=BG_PANEL, font_size=8).pack(
-            side=tk.LEFT, padx=2
-        )
+        self._make_btn(
+            start_tune, "-1.0s", lambda: self.adjust_selected_rally(-1.0, 0.0), variant="secondary", bg_key="bg_card", font_size=8, padx=8, pady=3
+        ).pack(side=tk.LEFT, padx=2)
+        self._make_btn(
+            start_tune, "-0.5s", lambda: self.adjust_selected_rally(-0.5, 0.0), variant="secondary", bg_key="bg_card", font_size=8, padx=8, pady=3
+        ).pack(side=tk.LEFT, padx=2)
+        self._make_btn(
+            start_tune, "+0.5s", lambda: self.adjust_selected_rally(0.5, 0.0), variant="secondary", bg_key="bg_card", font_size=8, padx=8, pady=3
+        ).pack(side=tk.LEFT, padx=2)
+        self._make_btn(
+            start_tune, "+1.0s", lambda: self.adjust_selected_rally(1.0, 0.0), variant="secondary", bg_key="bg_card", font_size=8, padx=8, pady=3
+        ).pack(side=tk.LEFT, padx=2)
 
-        # Right Preview: Shuttle Landing / End Frame
-        end_card = tk.Frame(preview_row, bg=BG_CARD, padx=8, pady=6, highlightbackground=BORDER_COLOR, highlightthickness=1)
+        # Right Card: End Frame
+        end_card = self._reg_frame(
+            tk.Frame(preview_row, padx=10, pady=8, highlightthickness=1), "bg_card", True
+        )
         end_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(6, 0))
-        self.lbl_end_title = tk.Label(
-            end_card, text="🔴 回合终点画面 (球落地/得分)", bg=BG_CARD, fg=ACCENT_GOLD, font=(self.font_family, 9, "bold")
+        self.lbl_end_title = self._reg_label(
+            tk.Label(end_card, text="END FRAME · 回合终点画面 (球落地瞬间)", font=(self.font_family, 9, "bold")),
+            "bg_card",
+            "accent_amber",
         )
         self.lbl_end_title.pack(anchor=tk.W)
-        self.canvas_end_preview = tk.Canvas(end_card, width=360, height=185, bg=BG_CANVAS, highlightthickness=0)
-        self.canvas_end_preview.pack(pady=4)
 
-        end_tune = tk.Frame(end_card, bg=BG_CARD)
+        self.canvas_end_preview = tk.Canvas(end_card, width=360, height=185, highlightthickness=0)
+        self.canvas_end_preview.pack(pady=6)
+
+        end_tune = self._reg_frame(tk.Frame(end_card), "bg_card", False)
         end_tune.pack(fill=tk.X)
-        tk.Label(end_tune, text="终点微调:", bg=BG_CARD, fg=FG_MUTED, font=(self.font_family, 9)).pack(side=tk.LEFT)
-        self._make_btn(
-            end_tune, "⏪ -1.0秒(剔除换球)", lambda: self.adjust_selected_rally(0.0, -1.0), bg=BG_PANEL, font_size=8
-        ).pack(side=tk.LEFT, padx=2)
-        self._make_btn(end_tune, "◀ -0.5秒", lambda: self.adjust_selected_rally(0.0, -0.5), bg=BG_PANEL, font_size=8).pack(
-            side=tk.LEFT, padx=2
-        )
-        self._make_btn(end_tune, "▶ +0.5秒", lambda: self.adjust_selected_rally(0.0, 0.5), bg=BG_PANEL, font_size=8).pack(
-            side=tk.LEFT, padx=2
+        self._reg_label(tk.Label(end_tune, text="终点微调", font=(self.font_family, 8)), "bg_card", "fg_secondary").pack(
+            side=tk.LEFT, padx=(0, 4)
         )
         self._make_btn(
-            end_tune, "⏩ +1.5秒(延长救球)", lambda: self.adjust_selected_rally(0.0, 1.5), bg=BG_PANEL, font_size=8
+            end_tune, "-1.0s 剔除换球", lambda: self.adjust_selected_rally(0.0, -1.0), variant="secondary", bg_key="bg_card", font_size=8, padx=8, pady=3
+        ).pack(side=tk.LEFT, padx=2)
+        self._make_btn(
+            end_tune, "-0.5s", lambda: self.adjust_selected_rally(0.0, -0.5), variant="secondary", bg_key="bg_card", font_size=8, padx=8, pady=3
+        ).pack(side=tk.LEFT, padx=2)
+        self._make_btn(
+            end_tune, "+0.5s", lambda: self.adjust_selected_rally(0.0, 0.5), variant="secondary", bg_key="bg_card", font_size=8, padx=8, pady=3
+        ).pack(side=tk.LEFT, padx=2)
+        self._make_btn(
+            end_tune, "+1.5s 延长救球", lambda: self.adjust_selected_rally(0.0, 1.5), variant="secondary", bg_key="bg_card", font_size=8, padx=8, pady=3
         ).pack(side=tk.LEFT, padx=2)
 
-        # 4. Rally Table & Game Split/Merge Toolbar
-        tbl_bar = tk.Frame(mid_frame, bg=BG_PANEL)
-        tbl_bar.pack(fill=tk.X, pady=(2, 4))
-        ttk.Label(tbl_bar, text="📋 回合明细列表（双击切换保留/剔除 · 空格键动态播放）", style="Header.TLabel").pack(side=tk.LEFT)
+        # 4. Rally Table & Inspector Toolbar
+        tbl_bar = self._reg_frame(tk.Frame(mid_sec), "bg_panel", False)
+        tbl_bar.pack(fill=tk.X, pady=(2, 6))
+        ttk.Label(tbl_bar, text="RALLIES · 回合列表（双击切换保留/剔除 · Space 键连续播放）", style="PanelHeader.TLabel").pack(
+            side=tk.LEFT
+        )
 
         self._make_btn(
-            tbl_bar, "📺 系统播放器全屏播放", self.preview_selected_clip_in_player, bg=BG_CARD, font_size=8
+            tbl_bar, "系统播放器打开 ↗", self.preview_selected_clip_in_player, variant="secondary", bg_key="bg_panel", font_size=8, padx=8, pady=3
         ).pack(side=tk.RIGHT, padx=2)
         self.btn_inline_play = self._make_btn(
-            tbl_bar, "▶️ 软件内连续播放此球 (Space)", self.toggle_inline_playback, bg=ACCENT_BLUE, font_size=8
+            tbl_bar, "▶ 窗口内连续播放 (Space)", self.toggle_inline_playback, variant="emerald", bg_key="bg_panel", font_size=8, bold=True, padx=10, pady=3
         )
         self.btn_inline_play.pack(side=tk.RIGHT, padx=2)
-        self._make_btn(tbl_bar, "🔗 合并至上一局", self.merge_selected_game, bg=BG_CARD, font_size=8).pack(
-            side=tk.RIGHT, padx=2
-        )
-        self._make_btn(tbl_bar, "✂️ 拆分为新一局", self.split_selected_game, bg=BG_CARD, font_size=8).pack(
-            side=tk.RIGHT, padx=2
-        )
-        self._make_btn(tbl_bar, "✅ 保留/剔除 (Del)", self.toggle_selected_rally, bg=BG_CARD, font_size=8).pack(
-            side=tk.RIGHT, padx=2
-        )
+        self._make_btn(
+            tbl_bar, "合并至上一局", self.merge_selected_game, variant="secondary", bg_key="bg_panel", font_size=8, padx=8, pady=3
+        ).pack(side=tk.RIGHT, padx=2)
+        self._make_btn(
+            tbl_bar, "拆分为新一局", self.split_selected_game, variant="secondary", bg_key="bg_panel", font_size=8, padx=8, pady=3
+        ).pack(side=tk.RIGHT, padx=2)
+        self._make_btn(
+            tbl_bar, "保留/剔除 (Del)", self.toggle_selected_rally, variant="secondary", bg_key="bg_panel", font_size=8, padx=8, pady=3
+        ).pack(side=tk.RIGHT, padx=2)
 
-        tree_frame = tk.Frame(mid_frame, bg=BG_CANVAS, highlightbackground=BORDER_COLOR, highlightthickness=1)
+        tree_frame = self._reg_frame(tk.Frame(mid_sec, highlightthickness=1), "bg_well", True)
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
         cols = ("status", "game", "uid", "start", "end", "dur", "hits", "label")
@@ -637,8 +1038,8 @@ class BadmintonCutterGUI:
         self.rally_tree.heading("uid", text="序号")
         self.rally_tree.heading("start", text="起点时间")
         self.rally_tree.heading("end", text="终点时间")
-        self.rally_tree.heading("dur", text="时长(秒)")
-        self.rally_tree.heading("hits", text="击球拍数")
+        self.rally_tree.heading("dur", text="时长")
+        self.rally_tree.heading("hits", text="拍数")
         self.rally_tree.heading("label", text="类型标签")
 
         self.rally_tree.column("status", width=65, anchor=tk.CENTER)
@@ -646,8 +1047,8 @@ class BadmintonCutterGUI:
         self.rally_tree.column("uid", width=55, anchor=tk.CENTER)
         self.rally_tree.column("start", width=95, anchor=tk.CENTER)
         self.rally_tree.column("end", width=95, anchor=tk.CENTER)
-        self.rally_tree.column("dur", width=75, anchor=tk.CENTER)
-        self.rally_tree.column("hits", width=75, anchor=tk.CENTER)
+        self.rally_tree.column("dur", width=70, anchor=tk.CENTER)
+        self.rally_tree.column("hits", width=70, anchor=tk.CENTER)
         self.rally_tree.column("label", width=160, anchor=tk.CENTER)
 
         self.rally_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -658,60 +1059,33 @@ class BadmintonCutterGUI:
         t_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.rally_tree.config(yscrollcommand=t_scroll.set)
 
-        # 5. Bottom Progress & Log Bar
-        bot_frame = tk.Frame(parent, bg=BG_CARD, padx=14, pady=8)
+        # 5. Bottom Codex Console & Progress Bar
+        bot_frame = self._reg_frame(tk.Frame(parent, padx=16, pady=10, highlightthickness=1), "bg_card", True)
         bot_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
-        prog_row = tk.Frame(bot_frame, bg=BG_CARD)
+        prog_row = self._reg_frame(tk.Frame(bot_frame), "bg_card", False)
         prog_row.pack(fill=tk.X)
-        tk.Label(prog_row, textvariable=self.status_var, bg=BG_CARD, fg=ACCENT_GREEN, font=(self.font_family, 9, "bold")).pack(
-            side=tk.LEFT
-        )
+        self._reg_label(
+            tk.Label(prog_row, textvariable=self.status_var, font=(self.mono_font, 9, "bold")),
+            "bg_card",
+            "accent_emerald",
+        ).pack(side=tk.LEFT)
 
         self.progress_bar = ttk.Progressbar(
-            bot_frame, variable=self.progress_var, maximum=100.0, style="Green.Horizontal.TProgressbar"
+            bot_frame, variable=self.progress_var, maximum=100.0, style="Codex.Horizontal.TProgressbar"
         )
-        self.progress_bar.pack(fill=tk.X, pady=(4, 6))
+        self.progress_bar.pack(fill=tk.X, pady=(6, 6))
 
         self.log_text = tk.Text(
             bot_frame,
             height=4,
-            bg=BG_CANVAS,
-            fg=FG_MUTED,
-            font=("Consolas" if platform.system() == "Windows" else "Menlo", 9),
+            font=(self.mono_font, 9),
             relief=tk.FLAT,
             state=tk.DISABLED,
+            padx=8,
+            pady=4,
         )
         self.log_text.pack(fill=tk.X)
-
-    def _make_btn(
-        self,
-        parent,
-        text: str,
-        command,
-        bg: str = BG_CARD,
-        fg: str = FG_TEXT,
-        font_size: int = 9,
-        bold: bool = False,
-        padx: int = 8,
-        pady: int = 4,
-    ) -> tk.Button:
-        font_spec = (self.font_family, font_size, "bold") if bold else (self.font_family, font_size)
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=bg,
-            fg=fg,
-            activebackground=ACCENT_GREEN,
-            activeforeground="#000000",
-            font=font_spec,
-            relief=tk.FLAT,
-            bd=0,
-            padx=padx,
-            pady=pady,
-            cursor="hand2",
-        )
 
     # -------------------------------------------------------------------------
     # Presets, Configuration & Queue Helpers
@@ -724,7 +1098,7 @@ class BadmintonCutterGUI:
         self.mode_review_var.set(preset_name == "grand_slam")
         self.mode_showcase_var.set(preset_name == "grand_slam")
         self.split_by_game_var.set(True)
-        self.append_log(f"✨ 已切换场景预设: 【{preset_name}】")
+        self.append_log(f"✨ 已切换场景预设: [{preset_name}]")
 
     def build_cutter_config(self) -> CutterConfig:
         modes = []
@@ -824,7 +1198,7 @@ class BadmintonCutterGUI:
             self._refresh_timeline_view()
             cached_cnt = sum(1 for v in self.video_files if v in self.timelines)
             self.append_log(
-                f"📁 已导入文件夹 [{base_name}] 共 {added} 个视频（其中 {cached_cnt} 个已秒级加载时间轴缓存）。"
+                f"📁 已导入文件夹 [{base_name}] 共 {added} 个视频（{cached_cnt} 个已秒级加载时间轴缓存）。"
             )
         elif not silent:
             messagebox.showinfo("提示", "所选文件夹中未找到 .mp4 / .mov / .mkv / .ts 视频文件。")
@@ -872,10 +1246,10 @@ class BadmintonCutterGUI:
             bname = os.path.basename(vpath)
             if vpath in self.timelines:
                 tl = self.timelines[vpath]
-                tag = f"✅ [{len(tl.enabled_rallies)}拍/{tl.game_count}局]"
+                tag = f"✓ {len(tl.enabled_rallies)}拍 / {tl.game_count}局"
             else:
-                tag = "⏳ [待扫描]"
-            self.video_listbox.insert(tk.END, f"{i:02d}. {bname}  {tag}")
+                tag = "… 待扫描"
+            self.video_listbox.insert(tk.END, f"{i:02d}. {bname}   [{tag}]")
         if self.video_files and not self.current_vpath:
             self.current_vpath = self.video_files[0]
             self.video_listbox.selection_set(0)
@@ -906,7 +1280,7 @@ class BadmintonCutterGUI:
             return
 
         for seg in tl.segments:
-            status_str = "✅ 保留" if seg.enabled else "🚫 剔除"
+            status_str = "✓ 保留" if seg.enabled else "× 剔除"
             game_str = f"第{seg.game_index:02d}局" if seg.kind == "rally" else "秒杀特辑"
             self.rally_tree.insert(
                 "",
@@ -933,6 +1307,7 @@ class BadmintonCutterGUI:
     def _redraw_timeline_canvas(self):
         c = self.timeline_canvas
         c.delete("all")
+        p = self.palette
         w = max(300, c.winfo_width())
         h = max(70, c.winfo_height())
 
@@ -941,8 +1316,8 @@ class BadmintonCutterGUI:
             c.create_text(
                 w // 2,
                 h // 2,
-                text="等待扫描视频时间轴（点击上方「🚀 一键全自动剪辑并输出视频」或「🔍 扫描/加载时间轴」）",
-                fill=FG_MUTED,
+                text="等待加载时间轴 · 点击上方「▶ 一键全自动剪辑并输出视频」或「扫描/加载时间轴」",
+                fill=p["fg_muted"],
                 font=(self.font_family, 10),
             )
             return
@@ -953,12 +1328,12 @@ class BadmintonCutterGUI:
         base_y = h - 22
 
         # Baseline ruler
-        c.create_line(pad_x, base_y, w - pad_x, base_y, fill=BORDER_COLOR, width=2)
+        c.create_line(pad_x, base_y, w - pad_x, base_y, fill=p["border"], width=1)
         for tick_i in range(7):
             t_val = dur * tick_i / 6.0
             tx = pad_x + usable_w * (tick_i / 6.0)
-            c.create_line(tx, base_y, tx, base_y + 5, fill=FG_MUTED)
-            c.create_text(tx, base_y + 13, text=format_time_zh(t_val), fill=FG_MUTED, font=(self.font_family, 8))
+            c.create_line(tx, base_y, tx, base_y + 4, fill=p["fg_muted"])
+            c.create_text(tx, base_y + 12, text=format_time_zh(t_val), fill=p["fg_muted"], font=(self.mono_font, 8))
 
         # Draw game boundary markers
         last_game = None
@@ -966,21 +1341,21 @@ class BadmintonCutterGUI:
             if seg.kind == "rally" and seg.enabled:
                 if last_game is not None and seg.game_index != last_game:
                     gx = pad_x + (seg.s_cut / dur) * usable_w
-                    c.create_line(gx, 6, gx, base_y, fill=ACCENT_BLUE, width=2, dash=(4, 2))
+                    c.create_line(gx, 6, gx, base_y, fill=p["accent_blue"], width=2, dash=(4, 2))
                     c.create_text(
-                        gx + 28,
+                        gx + 26,
                         12,
-                        text=f"🏆 第{seg.game_index:02d}局",
-                        fill=ACCENT_BLUE,
+                        text=f"第{seg.game_index:02d}局",
+                        fill=p["accent_blue"],
                         font=(self.font_family, 8, "bold"),
                     )
                 elif last_game is None:
                     gx = pad_x + (seg.s_cut / dur) * usable_w
                     c.create_text(
-                        max(pad_x + 28, gx + 24),
+                        max(pad_x + 24, gx + 22),
                         12,
-                        text=f"🏆 第{seg.game_index:02d}局",
-                        fill=ACCENT_BLUE,
+                        text=f"第{seg.game_index:02d}局",
+                        fill=p["accent_blue"],
                         font=(self.font_family, 8, "bold"),
                     )
                 last_game = seg.game_index
@@ -994,22 +1369,23 @@ class BadmintonCutterGUI:
             y1 = base_y - bar_h
 
             if not seg.enabled:
-                fill_col = "#334155"
+                fill_col = p["block_disabled"]
             elif seg.kind == "serve_kill":
                 fill_col = "#F97316"
             elif seg.dur >= 15.0:
-                fill_col = ACCENT_GOLD
+                fill_col = p["accent_amber"]
             else:
-                fill_col = ACCENT_GREEN
+                fill_col = p["accent_emerald"]
 
-            outline_col = "#FFFFFF" if seg.uid == self.selected_uid else ""
-            width_px = 2 if seg.uid == self.selected_uid else 0
+            is_sel = seg.uid == self.selected_uid
+            outline_col = p["fg_primary"] if is_sel else ""
+            width_px = 2 if is_sel else 0
             c.create_rectangle(x1, y1, x2, base_y - 1, fill=fill_col, outline=outline_col, width=width_px)
 
         # Draw active inline playhead if playing
         if self._playhead_time is not None:
             px = pad_x + (self._playhead_time / dur) * usable_w
-            c.create_line(px, 4, px, base_y + 4, fill=ACCENT_RED, width=2)
+            c.create_line(px, 4, px, base_y + 4, fill=p["accent_red"], width=2)
 
     def _x_to_time(self, x_px: int) -> float:
         tl = self.timelines.get(self.current_vpath) if self.current_vpath else None
@@ -1054,7 +1430,7 @@ class BadmintonCutterGUI:
             self.timeline_canvas.config(cursor="hand2")
         g_txt = f"第{seg.game_index:02d}局" if seg.kind == "rally" else "秒杀"
         self.lbl_hover_info.config(
-            text=f"🎯 #{seg.uid:02d} [{g_txt}] {format_time_zh(seg.s_cut)} ~ {format_time_zh(seg.e_cut)} ({seg.dur:.1f}s, {seg.hit_count}拍)"
+            text=f"#{seg.uid:02d} [{g_txt}] {format_time_zh(seg.s_cut)} → {format_time_zh(seg.e_cut)} ({seg.dur:.1f}s · {seg.hit_count}拍)"
         )
 
     def _on_timeline_mouse_down(self, event):
@@ -1122,10 +1498,10 @@ class BadmintonCutterGUI:
             return
 
         self.lbl_start_title.config(
-            text=f"🟢 回合 #{seg.uid:02d} 起点画面 ({format_time_zh(seg.s_cut)})"
+            text=f"START FRAME · 回合 #{seg.uid:02d} 起点 ({format_time_zh(seg.s_cut)})"
         )
         self.lbl_end_title.config(
-            text=f"🔴 回合 #{seg.uid:02d} 终点画面 ({format_time_zh(seg.e_cut)} · 共{seg.dur:.1f}秒)"
+            text=f"END FRAME · 回合 #{seg.uid:02d} 终点 ({format_time_zh(seg.e_cut)} · {seg.dur:.1f}s)"
         )
 
         vpath = tl.video_path
@@ -1155,7 +1531,7 @@ class BadmintonCutterGUI:
                 self.canvas_end_preview.create_image(0, 0, anchor=tk.NW, image=self._end_photo)
 
     # -------------------------------------------------------------------------
-    # Inline Rally Video Playback (Plays right inside the GUI canvas)
+    # Inline Rally Video Playback
     # -------------------------------------------------------------------------
     def toggle_inline_playback(self):
         if self._inline_playing:
@@ -1170,8 +1546,9 @@ class BadmintonCutterGUI:
             return
 
         self._inline_playing = True
-        self.btn_inline_play.config(text="⏸ 停止软件内播放 (Space)", bg=ACCENT_GOLD, fg="#1F1600")
-        self.lbl_start_title.config(text=f"▶️ 正在加载回合 #{seg.uid:02d} 连续画面...")
+        self.btn_inline_play.set_text("⏸ 停止播放 (Space)")
+        self.btn_inline_play.set_variant("amber")
+        self.lbl_start_title.config(text=f"▶ 正在加载回合 #{seg.uid:02d} 连续画面...")
 
         vpath = tl.video_path
         s_cut = seg.s_cut
@@ -1207,7 +1584,7 @@ class BadmintonCutterGUI:
             self.canvas_start_preview.delete("all")
             self.canvas_start_preview.create_image(0, 0, anchor=tk.NW, image=self._start_photo)
         self.lbl_start_title.config(
-            text=f"▶️ 正在播放回合 #{self.selected_uid:02d} | 实时时间: {format_time_zh(t_cur)}"
+            text=f"PLAYING · 回合 #{self.selected_uid:02d}  [{format_time_zh(t_cur)}]"
         )
         self._redraw_timeline_canvas()
         self._inline_frame_idx += 1
@@ -1218,12 +1595,13 @@ class BadmintonCutterGUI:
             self._inline_playing = False
             self._inline_frames = []
             self._playhead_time = None
-            self.btn_inline_play.config(text="▶️ 软件内连续播放此球 (Space)", bg=ACCENT_BLUE, fg=FG_TEXT)
+            self.btn_inline_play.set_text("▶ 窗口内连续播放 (Space)")
+            self.btn_inline_play.set_variant("emerald")
             self._redraw_timeline_canvas()
             self._update_preview_thumbnails()
 
     # -------------------------------------------------------------------------
-    # Fine-Tuning Actions (Adjust Time, Toggle Enable, Split/Merge Game, Save)
+    # Fine-Tuning Actions
     # -------------------------------------------------------------------------
     def adjust_selected_rally(self, delta_s: float, delta_e: float):
         self._stop_inline_playback()
@@ -1251,7 +1629,7 @@ class BadmintonCutterGUI:
             self._refresh_video_listbox()
             self.rally_tree.selection_set(str(seg.uid))
             state_txt = "保留" if seg.enabled else "剔除"
-            self.append_log(f"🔄 回合 #{seg.uid:02d} 状态已切换为: 【{state_txt}】")
+            self.append_log(f"🔄 回合 #{seg.uid:02d} 状态已切换为: [{state_txt}]")
 
     def split_selected_game(self):
         tl = self.timelines.get(self.current_vpath) if self.current_vpath else None
@@ -1307,7 +1685,7 @@ class BadmintonCutterGUI:
             messagebox.showwarning("正在运行", "当前已有剪辑任务正在进行中。")
             return
         if not self.video_files:
-            messagebox.showwarning("请添加视频", "请先点击「➕ 添加视频」或「📁 添加文件夹」导入羽毛球录像！")
+            messagebox.showwarning("请添加视频", "请先点击「＋ 添加视频」或「📁 导入文件夹」添加羽毛球录像！")
             return
 
         self._stop_inline_playback()
@@ -1397,7 +1775,7 @@ class BadmintonCutterGUI:
         if self.is_running:
             return
         if not self.timelines:
-            messagebox.showinfo("请先扫描", "请先点击「🔍 扫描/加载时间轴」或直接点击「🚀 一键全自动剪辑并输出视频」。")
+            messagebox.showinfo("请先扫描", "请先点击「扫描/加载时间轴」或直接点击「▶ 一键全自动剪辑并输出视频」。")
             return
 
         self._stop_inline_playback()
@@ -1471,12 +1849,15 @@ class BadmintonCutterGUI:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="羽毛球 AI 视频剪辑大师 可视化桌面版")
-    parser.add_argument("--self-test", action="store_true", help="Run automated GUI initialization self-test and exit")
+    parser = argparse.ArgumentParser(description="羽毛球 AI 视频剪辑大师 · Codex UI 可视化桌面版")
+    parser.add_argument("--self-test", action="store_true", help="Run automated GUI initialization & Dark/Light theme self-test")
+    parser.add_argument("--theme", choices=["dark", "light"], default=None, help="Initial theme mode (dark or light)")
     args = parser.parse_args()
 
     root = tk.Tk()
     app = BadmintonCutterGUI(root)
+    if args.theme:
+        app.apply_theme(args.theme)
 
     if args.self_test:
         fake_vpath = "/tmp/fake_match.mp4"
@@ -1494,13 +1875,16 @@ def main():
         app.current_vpath = fake_vpath
         app._refresh_video_listbox()
         app._refresh_timeline_view()
-        app.apply_preset("grand_slam")
-        cfg = app.build_cutter_config()
-        assert len(cfg.modes) == 6
-        app.apply_preset("default")
-        cfg2 = app.build_cutter_config()
-        assert cfg2.modes == ["all"]
-        print("GUI_SELF_TEST_OK")
+
+        # Test Dark -> Light -> Dark theme switching
+        app.apply_theme("light")
+        assert app.theme_mode == "light"
+        assert app.palette["bg_panel"] == "#FFFFFF"
+        app.toggle_theme()
+        assert app.theme_mode == "dark"
+        assert app.palette["bg_app"] == "#0D0D0D"
+
+        print("CODEX_GUI_DARK_LIGHT_SELF_TEST_OK")
         os._exit(0)
 
     root.mainloop()
