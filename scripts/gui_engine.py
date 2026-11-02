@@ -5,12 +5,17 @@ GUI Engine & Timeline Controller for Badminton AI Video Cutter (v1.7.0)
 Separates video analysis (acoustic + optical motion + player ReID segmentation)
 and multi-mode video export so that the visual desktop GUI can:
 1. Run 1-click full automatic batch cutting & exporting, OR
-2. Scan & preview the interactive rally timeline, fine-tune start/end timestamps,
-   toggle individual clips, split/merge games, preview start/end video frames,
-   and then export all selected video modes at lossless speed.
+2. Scan & preview the interactive rally timeline, fine-tune start/end timestamps
+   (via buttons or direct mouse drag on the timeline), toggle individual clips,
+   split/merge games, preview start/end video frames or play the rally inline,
+   save/load `.timeline.json` caches instantaneously, and export all selected
+   video modes at lossless / hardware-accelerated speed.
 """
 
+import hashlib
+import json
 import os
+import platform
 import shutil
 import subprocess
 import tempfile
@@ -55,6 +60,49 @@ from modes_handler import (
 
 if HAS_CV2:
     import cv2
+
+_HW_ENCODER_CACHE: Dict[str, str] = {}
+
+
+def detect_hw_video_encoder(ffmpeg_bin: str = DEFAULT_FFMPEG) -> str:
+    """
+    Probes available hardware H.264 encoders (NVIDIA NVENC, Intel QSV, AMD AMF on Windows;
+    VideoToolbox on macOS) and falls back to `libx264`.
+    """
+    if ffmpeg_bin in _HW_ENCODER_CACHE:
+        return _HW_ENCODER_CACHE[ffmpeg_bin]
+
+    candidates = (
+        ["h264_nvenc", "h264_qsv", "h264_amf"]
+        if platform.system() == "Windows"
+        else ["h264_videotoolbox", "h264_nvenc"]
+    )
+    for enc in candidates:
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=64x64:d=0.1",
+            "-c:v",
+            enc,
+            "-f",
+            "null",
+            "-",
+        ]
+        try:
+            res = subprocess.run(
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=4
+            )
+            if res.returncode == 0:
+                _HW_ENCODER_CACHE[ffmpeg_bin] = enc
+                return enc
+        except Exception:
+            continue
+
+    _HW_ENCODER_CACHE[ffmpeg_bin] = "libx264"
+    return "libx264"
 
 
 @dataclass
@@ -110,6 +158,31 @@ class RallySegment:
             "peaks": self.peaks,
             "surge": self.surge,
         }
+
+    def to_json_dict(self) -> dict:
+        return {
+            "uid": int(self.uid),
+            "kind": str(self.kind),
+            "game_index": int(self.game_index),
+            "s_cut": float(self.s_cut),
+            "e_cut": float(self.e_cut),
+            "peaks": [[float(t), float(v)] for t, v in self.peaks],
+            "enabled": bool(self.enabled),
+            "surge": float(self.surge),
+        }
+
+    @classmethod
+    def from_json_dict(cls, d: dict) -> "RallySegment":
+        return cls(
+            uid=int(d["uid"]),
+            kind=str(d.get("kind", "rally")),
+            game_index=int(d.get("game_index", 1)),
+            s_cut=float(d["s_cut"]),
+            e_cut=float(d["e_cut"]),
+            peaks=[(float(p[0]), float(p[1])) for p in d.get("peaks", [])],
+            enabled=bool(d.get("enabled", True)),
+            surge=float(d.get("surge", 0.0)),
+        )
 
 
 @dataclass
@@ -220,6 +293,74 @@ class VideoTimeline:
         games = {s.game_index for s in self.enabled_rallies}
         return len(games) if games else (1 if self.enabled_rallies else 0)
 
+    def to_dict(self) -> dict:
+        return {
+            "version": "1.7.0",
+            "video_path": self.video_path,
+            "display_name": self.display_name,
+            "folder_name": self.folder_name,
+            "duration": float(self.duration),
+            "stable_start": float(self.stable_start),
+            "unstable_end": float(self.unstable_end),
+            "segments": [s.to_json_dict() for s in self.segments],
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "VideoTimeline":
+        return cls(
+            video_path=str(d["video_path"]),
+            display_name=str(d["display_name"]),
+            folder_name=str(d["folder_name"]),
+            duration=float(d.get("duration", 0.0)),
+            stable_start=float(d.get("stable_start", 0.0)),
+            unstable_end=float(d.get("unstable_end", 0.0)),
+            segments=[RallySegment.from_json_dict(s) for s in d.get("segments", [])],
+        )
+
+
+def get_default_timeline_cache_path(vpath: str) -> str:
+    cache_dir = os.path.join(tempfile.gettempdir(), "badminton_timeline_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    abs_p = os.path.abspath(vpath)
+    mtime = int(os.path.getmtime(abs_p)) if os.path.exists(abs_p) else 0
+    key = hashlib.md5(f"{abs_p}:{mtime}".encode("utf-8")).hexdigest()[:12]
+    bname = os.path.splitext(os.path.basename(abs_p))[0]
+    return os.path.join(cache_dir, f"{bname}_{key}.timeline.json")
+
+
+def save_timeline_json(timeline: VideoTimeline, path: Optional[str] = None) -> str:
+    if path is None:
+        path = get_default_timeline_cache_path(timeline.video_path)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(timeline.to_dict(), f, ensure_ascii=False, indent=2)
+    return path
+
+
+def load_timeline_json(path: str) -> Optional[VideoTimeline]:
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return VideoTimeline.from_dict(data)
+    except Exception:
+        return None
+
+
+def try_load_cached_timeline(vpath: str) -> Optional[VideoTimeline]:
+    # Check sidecar file next to video first, then temp cache
+    sidecar = os.path.splitext(vpath)[0] + ".timeline.json"
+    if os.path.exists(sidecar):
+        tl = load_timeline_json(sidecar)
+        if tl:
+            tl.video_path = vpath
+            return tl
+    cache_p = get_default_timeline_cache_path(vpath)
+    if os.path.exists(cache_p):
+        return load_timeline_json(cache_p)
+    return None
+
 
 MATCH_MAPPING = {
     "VID_20261019_201713_046": "01_场次一_双打实战_201713",
@@ -289,6 +430,55 @@ def extract_preview_frame_rgb(
     return None
 
 
+def extract_clip_preview_frames(
+    vpath: str,
+    s_cut: float,
+    dur: float,
+    fps_out: int = 8,
+    width: int = 360,
+    height: int = 185,
+    ffmpeg_bin: str = DEFAULT_FFMPEG,
+) -> List[Tuple[float, np.ndarray]]:
+    """
+    Extracts a sequence of `(timestamp_sec, rgb_frame)` for inline GUI playback.
+    """
+    if not vpath or not os.path.exists(vpath) or dur <= 0:
+        return []
+    play_dur = min(25.0, max(1.0, dur))
+    cmd = [
+        ffmpeg_bin,
+        "-ss",
+        f"{max(0.0, s_cut):.2f}",
+        "-i",
+        vpath,
+        "-t",
+        f"{play_dur:.2f}",
+        "-vf",
+        f"fps={fps_out},scale={width}:{height}",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+    ]
+    frames = []
+    frame_bytes = width * height * 3
+    try:
+        res = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=15
+        )
+        raw = res.stdout
+        n_frames = len(raw) // frame_bytes
+        for i in range(n_frames):
+            chunk = raw[i * frame_bytes : (i + 1) * frame_bytes]
+            arr = np.frombuffer(chunk, dtype=np.uint8).reshape((height, width, 3))
+            t_cur = s_cut + (i / float(fps_out))
+            frames.append((t_cur, arr))
+    except Exception:
+        pass
+    return frames
+
+
 def analyze_video_file(
     vpath: str,
     idx: int = 1,
@@ -296,10 +486,12 @@ def analyze_video_file(
     progress_cb: Optional[Callable[[float, str], None]] = None,
     log_cb: Optional[Callable[[str], None]] = None,
     cancel_check: Optional[Callable[[], bool]] = None,
+    use_cache: bool = True,
 ) -> VideoTimeline:
     """
     Scans a badminton match video to build an interactive `VideoTimeline` containing
     verified multi-shot rallies (auto-grouped by game via player ReID) and serve-kill clips.
+    Automatically saves `.timeline.json` cache on completion.
     """
     if config is None:
         config = CutterConfig()
@@ -314,6 +506,18 @@ def analyze_video_file(
 
     def _cancelled() -> bool:
         return bool(cancel_check and cancel_check())
+
+    if use_cache:
+        cached = try_load_cached_timeline(vpath)
+        if cached and cached.segments:
+            _prog(
+                100.0,
+                f"已从缓存秒级加载：{len(cached.enabled_rallies)} 个多拍 ({cached.game_count} 局)，{len(cached.enabled_serve_kills)} 个接发秒杀",
+            )
+            _log(
+                f"⚡ [{cached.display_name}] 已秒级加载时间轴缓存：{len(cached.enabled_rallies)} 个多拍（{cached.game_count} 局），{len(cached.enabled_serve_kills)} 个秒杀"
+            )
+            return cached
 
     folder_name, display_name = resolve_match_folder_name(vpath, idx)
     v_dur = get_video_duration(vpath, config.ffmpeg_bin)
@@ -442,7 +646,7 @@ def analyze_video_file(
         rally_game_map = {i: 1 for i in range(len(valid_rallies))}
         if config.split_by_game and len(valid_rallies) > 1:
             _prog(68.0, f"正在提取 {len(valid_rallies)} 个回合的球员上衣色彩特征 (ReID)...")
-            _log(f"  👕 正在分析四名球员球衣色彩特征与休息间隔，自动划分球局...")
+            _log("  👕 正在分析四名球员球衣色彩特征与休息间隔，自动划分球局...")
 
             def _extract_one_emb(task):
                 i_idx, s_t = task
@@ -521,6 +725,11 @@ def analyze_video_file(
                 uid_counter += 1
             _log(f"  ⚡ 识别到发球/接发秒杀回合: {len(kills)} 处")
 
+        try:
+            save_timeline_json(timeline)
+        except Exception:
+            pass
+
         _prog(
             100.0,
             f"扫描完成：{len(timeline.enabled_rallies)} 个多拍 ({timeline.game_count} 局)，{len(timeline.enabled_serve_kills)} 个接发秒杀",
@@ -563,6 +772,12 @@ def export_video_timeline(
     os.makedirs(output_root, exist_ok=True)
     match_dir = os.path.join(output_root, timeline.folder_name)
     os.makedirs(match_dir, exist_ok=True)
+
+    # Save timeline JSON inside the match output folder as well
+    try:
+        save_timeline_json(timeline, os.path.join(match_dir, "match_timeline.json"))
+    except Exception:
+        pass
 
     enabled_rallies = timeline.enabled_rallies
     enabled_kills = timeline.enabled_serve_kills
@@ -745,7 +960,8 @@ def export_video_timeline(
         _prog(74.0, f"正在导出【个人高光 Solo 视角 ({config.player})】...")
         _log(f"  🌟 正在筛选导出【个人高光 Solo 视角 ({config.player})】...")
         rally_dicts = [
-            {**seg.to_rally_dict(), "_uid": seg.uid} for seg in enabled_rallies
+            {**seg.to_rally_dict(), "_uid": seg.uid, "index": idx}
+            for idx, seg in enumerate(enabled_rallies)
         ]
         solo_selected = filter_solo_rallies(rally_dicts, target_player=config.player)
         solo_dir = os.path.join(match_dir, f"个人高光Solo视角_{config.player}")
@@ -846,8 +1062,84 @@ def export_video_timeline(
                 config.ffmpeg_bin, kill_clips, os.path.join(kill_dir, kill_reel_name)
             )
 
-    _prog(100.0, f"导出完成！共输出 {len(clip_paths)} 段多拍、{len(export_summary['kill_clips'])} 段秒杀")
-    _log(
-        f"🎉 [{timeline.display_name}] 视频导出完毕！保存目录: {match_dir}"
+    _prog(
+        100.0,
+        f"导出完成！共输出 {len(clip_paths)} 段多拍、{len(export_summary['kill_clips'])} 段秒杀",
     )
+    _log(f"🎉 [{timeline.display_name}] 视频导出完毕！保存目录: {match_dir}")
     return export_summary
+
+
+def export_batch_timelines(
+    timelines: List[VideoTimeline],
+    output_root: str,
+    config: Optional[CutterConfig] = None,
+    progress_cb: Optional[Callable[[float, str], None]] = None,
+    log_cb: Optional[Callable[[str], None]] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
+) -> Dict[str, object]:
+    """
+    Exports a batch of `VideoTimeline` objects and compiles cross-match grand
+    collections (`00_特别精选_发球被一拍定死大赏` and `00_【全场巅峰超长多拍TOP大集锦】`).
+    """
+    if config is None:
+        config = CutterConfig()
+
+    all_grand_rallies: List[str] = []
+    all_grand_kills: List[str] = []
+    match_summaries = []
+    total_v = max(1, len(timelines))
+
+    for idx, tl in enumerate(timelines, 1):
+        if cancel_check and cancel_check():
+            break
+
+        def _sub_prog(pct: float, msg: str, i=idx):
+            if progress_cb:
+                overall = ((i - 1) + pct / 100.0) / total_v * 95.0
+                progress_cb(overall, f"[{i}/{total_v}] {msg}")
+
+        res = export_video_timeline(
+            tl,
+            output_root=output_root,
+            config=config,
+            progress_cb=_sub_prog,
+            log_cb=log_cb,
+            cancel_check=cancel_check,
+        )
+        match_summaries.append(res)
+        all_grand_rallies.extend(res.get("grand_rallies", []))
+        all_grand_kills.extend(res.get("kill_clips", []))
+
+    if all_grand_kills and not (cancel_check and cancel_check()):
+        grand_kill_dir = os.path.join(output_root, "00_特别精选_发球被一拍定死大赏")
+        os.makedirs(grand_kill_dir, exist_ok=True)
+        for g_idx, kclip in enumerate(all_grand_kills, 1):
+            if os.path.exists(kclip):
+                base_k = os.path.basename(kclip)
+                dest_k = os.path.join(grand_kill_dir, f"全场秒杀{g_idx:02d}_{base_k}")
+                if not os.path.exists(dest_k):
+                    try:
+                        os.link(kclip, dest_k)
+                    except OSError:
+                        shutil.copy2(kclip, dest_k)
+        if config.reel:
+            grand_kill_reel = os.path.join(
+                grand_kill_dir, "00_【发球被一拍定死_接发秒杀连贯大赏】_全场纯净原画版.mp4"
+            )
+            concat_clips(config.ffmpeg_bin, all_grand_kills, grand_kill_reel)
+
+    if config.reel and all_grand_rallies and not (cancel_check and cancel_check()):
+        grand_reel_path = os.path.join(
+            output_root, "00_【全场巅峰超长多拍TOP大集锦】_纯净原画零死球无字幕版.mp4"
+        )
+        concat_clips(config.ffmpeg_bin, all_grand_rallies, grand_reel_path)
+
+    if progress_cb:
+        progress_cb(100.0, f"🎉 全部 {len(match_summaries)} 场视频剪辑与导出完成！")
+
+    return {
+        "matches": match_summaries,
+        "grand_rallies": all_grand_rallies,
+        "grand_kills": all_grand_kills,
+    }

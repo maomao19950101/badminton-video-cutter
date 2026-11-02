@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Unit tests for `gui_engine.py` (Timeline editing, game split/merge, and multi-mode export).
+Unit tests for `gui_engine.py` (Timeline editing, game split/merge, JSON persistence,
+hardware encoder detection, and multi-mode single/batch export).
 """
 
 import os
@@ -15,8 +16,12 @@ from gui_engine import (
     CutterConfig,
     RallySegment,
     VideoTimeline,
+    detect_hw_video_encoder,
+    export_batch_timelines,
     export_video_timeline,
+    load_timeline_json,
     resolve_match_folder_name,
+    save_timeline_json,
 )
 
 
@@ -93,7 +98,6 @@ class TestGuiEngine(unittest.TestCase):
 
     def test_split_and_merge_games(self):
         self.assertEqual(self.timeline.game_count, 2)
-        # Split game at segment uid=2 -> segments 1 (game 1), 2 (game 2), 3 (game 3)
         ok = self.timeline.split_game_at_segment(2)
         self.assertTrue(ok)
         self.assertEqual(self.timeline.get_segment(1).game_index, 1)
@@ -101,13 +105,29 @@ class TestGuiEngine(unittest.TestCase):
         self.assertEqual(self.timeline.get_segment(3).game_index, 3)
         self.assertEqual(self.timeline.game_count, 3)
 
-        # Merge segment uid=2 back into game 1 -> segments 1 (game 1), 2 (game 1), 3 (game 2)
         ok_merge = self.timeline.merge_game_with_previous(2)
         self.assertTrue(ok_merge)
         self.assertEqual(self.timeline.get_segment(1).game_index, 1)
         self.assertEqual(self.timeline.get_segment(2).game_index, 1)
         self.assertEqual(self.timeline.get_segment(3).game_index, 2)
         self.assertEqual(self.timeline.game_count, 2)
+
+    def test_timeline_json_persistence_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            json_path = os.path.join(tmpdir, "test.timeline.json")
+            save_timeline_json(self.timeline, json_path)
+            self.assertTrue(os.path.exists(json_path))
+            loaded = load_timeline_json(json_path)
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded.display_name, self.timeline.display_name)
+            self.assertEqual(len(loaded.segments), 4)
+            self.assertEqual(loaded.game_count, 2)
+            self.assertAlmostEqual(loaded.get_segment(2).s_cut, 35.0)
+            self.assertEqual(loaded.get_segment(4).kind, "serve_kill")
+
+    def test_detect_hw_video_encoder(self):
+        enc = detect_hw_video_encoder("/nonexistent/ffmpeg_binary")
+        self.assertEqual(enc, "libx264")
 
     def test_export_video_timeline_multi_modes(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -148,16 +168,17 @@ class TestGuiEngine(unittest.TestCase):
                  patch("gui_engine.generate_condensed_reel", side_effect=fake_condensed), \
                  patch("gui_engine.generate_vertical_clip", side_effect=fake_vertical), \
                  patch("gui_engine.generate_review_package", side_effect=fake_review):
-                res = export_video_timeline(self.timeline, tmpdir, config=config)
+                res = export_batch_timelines([self.timeline], tmpdir, config=config)
 
-            self.assertEqual(len(res["rally_clips"]), 3)
-            self.assertEqual(len(res["kill_clips"]), 1)
-            match_dir = res["match_dir"]
+            self.assertEqual(len(res["matches"]), 1)
+            match_dir = res["matches"][0]["match_dir"]
             self.assertTrue(os.path.exists(os.path.join(match_dir, "game_summary.txt")))
+            self.assertTrue(os.path.exists(os.path.join(match_dir, "match_timeline.json")))
             self.assertTrue(os.path.exists(os.path.join(match_dir, "竖屏9比16自媒体短视频")))
             self.assertTrue(os.path.exists(os.path.join(match_dir, "个人高光Solo视角_near_left")))
             self.assertTrue(os.path.exists(os.path.join(match_dir, "战术风格分类集锦")))
             self.assertTrue(os.path.exists(os.path.join(match_dir, "接发秒杀一拍定死")))
+            self.assertTrue(os.path.exists(os.path.join(tmpdir, "00_特别精选_发球被一拍定死大赏")))
 
     def test_resolve_match_folder_name(self):
         folder, disp = resolve_match_folder_name("/path/VID_20261029_203442_050.mp4", 1)
