@@ -199,6 +199,45 @@ class TestRallyDecoupling(unittest.TestCase):
         self.assertAlmostEqual(r["first_hit"], 715.32, places=2)
         self.assertAlmostEqual(r["last_hit"], 734.21, places=2)
 
+    def test_preserve_soft_finish_after_smash(self):
+        """
+        Tests that a rally containing a smash followed by defensive block,
+        net push, and high clear to baseline is preserved in its entirety
+        without premature cutoff at the smash defense.
+        Simulated sequence representing Rally 85 from Match 2:
+        - 1606.81: Serve (E=2.71e7)
+        - 1607.29: Return (E=8.16e7)
+        - 1608.14: Counter (E=6.46e6)
+        - 1608.97: Push (E=1.60e7)
+        - 1609.69: Clear (E=6.59e6)
+        - 1610.49: Drop (E=1.72e7)
+        - 1610.85: Smash (E=8.16e7)
+        - 1611.38: Defensive block (gap=0.53s, E=5.35e6)
+        - 1612.10: Net push (gap=0.72s, E=5.73e6)
+        - 1613.95: High clear to baseline (gap=1.85s, E=7.01e6)
+        """
+        peaks = [
+            (1606.81, 2.71e7),
+            (1607.29, 8.16e7),
+            (1608.14, 6.46e6),
+            (1608.97, 1.60e7),
+            (1609.69, 6.59e6),
+            (1610.49, 1.72e7),
+            (1610.85, 8.16e7),
+            (1611.38, 5.35e6),
+            (1612.10, 5.73e6),
+            (1613.95, 7.01e6),
+        ]
+        v_dur = 1812.0
+        rallies = extract_multi_shot_rallies(peaks, v_dur)
+        self.assertEqual(len(rallies), 1, "Rally 85 must remain 1 complete rally without being cleaved after smash defense")
+        r = rallies[0]
+        self.assertEqual(r["hits"], 10, "Must preserve all 10 strokes from serve to high clear")
+        self.assertAlmostEqual(r["first_hit"], 1606.81, places=2)
+        self.assertAlmostEqual(r["last_hit"], 1613.95, places=2)
+        self.assertTrue(r["s_cut"] <= 1606.81)
+        self.assertTrue(r["e_cut"] >= 1613.95 + 1.50, "e_cut must allow high clear to descend and land on court")
+
 
 if __name__ == "__main__":
     unittest.main()

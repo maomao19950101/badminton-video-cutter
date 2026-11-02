@@ -6,7 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.5] - 2026-10-30 (Current Release)
+## [1.4.6] - 2026-11-02 (Current Release)
+
+### 🚀 Major Fix: Smash Defense Soft-Finish Preservation & Multimodal Ground Landing (杀球防守软终结保全与多模态落地砸地保全版)
+- **Smash Defense & Soft Finish Preservation (杀球防守反击与软终结多拍保全·彻底杜绝防守起高球后腰斩)**:
+  - Eliminated false post-smash decoupling in Rule 1: A post-smash sequence is decoupled ONLY if a genuine subsequent Point 2 exists ahead in the cluster (requiring remaining hits $\ge 3$, an inter-point serve setup pause $\ge 2.0\text{s}$, and an active attack in Point 2).
+  - Preserved soft finishes after smashes: When a smash is returned by a defensive block, followed by net touches, lobs, or deep high clears, all strokes are guaranteed to remain intact in the current rally rather than being mistakenly treated as floor scoop taps.
+  - Completely resolved `多拍85` in Match 2 (`051`): extended from premature 6.1s (26分46秒至26分52秒, 8 hits) to complete 10.8s (26分46秒至26分57秒, 10 hits), fully capturing the serve, return, drive, drop, smash, defensive block, net push, high clear, shuttlecock flight, out-of-bounds floor landing at 26:56.5s, and players concluding the point.
+- **Multimodal Ground-Landing Guarantee (落地即止视觉动量切断保全·彻底杜绝'没有落地就完了')**:
+  - Replaced the arbitrary static 0.85s landing buffer with adaptive optical court motion tracking: for high clears, lobs, lifts, and pushes, the engine tracks player running/tracking motion (`our_m \ge 5.2`) up to 2.85s until court motion settles when the shuttlecock physically hits the floor mat.
+  - Synchronized `detect_visual_deadball_cutoff` with `extract_multi_shot_rallies` to ensure consistent flight completion and zero premature termination.
+- **Inter-Point Decoupling Consistency (跨分死球隔离零退化)**:
+  - 100% regression-free: Point 1 and Point 2 in Rally 81 remain strictly decoupled across inter-point floor scoop taps, while Rally 40 and Rally 67 remain completely continuous.
+
+---
+
+## [1.4.5] - 2026-10-30
 
 ### 🚀 Major Fix: Multi-Shot Continuation Immunity & Intermediate Smash Cleaving Elimination (中局杀球攻防相持免疫与长多拍腰斩彻底修复版)
 - **Intermediate Smash Continuation Immunity (中局杀球防守反击相持态免疫·杜绝长拉锯中途劈开)**:

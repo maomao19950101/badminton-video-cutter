@@ -35,7 +35,7 @@ from match_segmenter import (
     partition_rallies_by_game
 )
 
-__version__ = "1.4.3"
+__version__ = "1.4.6"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -269,25 +269,51 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
 
 def detect_visual_deadball_cutoff(video_path, s_time, e_time, peaks, cap=None, fps=0.0):
     """
-    Ground-Truth Visual Dead-Ball Slicer (落地即止强切断机制 - v1.3.8):
+    Ground-Truth Visual Dead-Ball Slicer (落地即止强切断机制 - v1.4.6):
     Protects active continuous rallies from premature termination.
-    Prunes single trailing floor-pickup taps if preceded by a long dead gap (>= 2.05s).
-    Guarantees full downward landing trajectory (0.85s after the final strike, 0.65s for fast smash)
-    with zero trailing walking or dead-ball pauses.
+    Prunes trailing floor-pickup taps if preceded by a long dead gap (>= 2.00s).
+    Guarantees full downward landing trajectory (tracks optical court motion
+    until shuttlecock physically touches floor and players decelerate).
     """
     if not peaks or len(peaks) < 3:
         return e_time, peaks
 
     valid_peaks = list(peaks)
-    # Prune an isolated single tail tap if preceded by gap >= 2.05s and low energy
-    if len(valid_peaks) >= 3:
+    # Prune trailing floor pickup taps if preceded by gap >= 2.00s and low energy
+    while len(valid_peaks) >= 3:
         times = [p[0] for p in valid_peaks]
-        if (times[-1] - times[-2]) >= 2.05 and valid_peaks[-1][1] < 8.0e6:
+        if (times[-1] - times[-2]) >= 2.00 and valid_peaks[-1][1] < 8.0e6:
             valid_peaks.pop()
+        else:
+            break
 
-    tail_energy = valid_peaks[-1][1]
-    landing_delay = 0.65 if tail_energy >= 2.0e7 else 0.85
-    real_e_cut = min(e_time, valid_peaks[-1][0] + landing_delay)
+    last_hit = valid_peaks[-1][0]
+    tail_e = valid_peaks[-1][1]
+    had_smash_at_end = any(valid_peaks[k][1] >= 4.5e7 for k in range(max(0, len(valid_peaks) - 2), len(valid_peaks)))
+
+    if had_smash_at_end:
+        landing_delay = 0.65 if tail_e >= 2.0e7 else 0.85
+        real_e_cut = min(e_time, last_hit + landing_delay)
+    elif cap is not None or video_path is not None:
+        curr_t = last_hit + 0.85
+        max_t = min(e_time, last_hit + 2.85)
+        last_active_t = curr_t
+        while curr_t <= max_t:
+            m = sample_instant_motion(cap, fps, curr_t, vpath=video_path)
+            if m is not None:
+                our_m, far_m, near_m, top_d, b_max = m
+                if our_m >= 5.2 and (b_max < 16.0 or our_m >= 6.0):
+                    last_active_t = curr_t
+                else:
+                    break
+            else:
+                break
+            curr_t += 0.35
+        real_e_cut = min(e_time, last_active_t + 0.35)
+    else:
+        landing_delay = 1.65
+        real_e_cut = min(e_time, last_hit + landing_delay)
+
     return real_e_cut, valid_peaks
 
 
@@ -312,14 +338,14 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
 
 def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None, fps=0.0, vpath=None):
     """
-    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.5):
+    Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.6):
     1. Initial Clustering with max_gap=2.85s:
        Preserves high baseline-to-baseline clears (flight time up to 2.80s) without premature truncation.
     2. Physical Cadence & Stroke Decoupling:
-       - Post-Smash Winner Drop & Defense Continuation: Decouples post-smash dead-ball floor taps
-         only when a smash occurred prior to c[i] and all subsequent hits are weak floor taps (< 1.8e7).
-         Guarantees that a smash followed by defensive return, counter-stroke, or high clears is preserved
-         intact until true rally completion without mid-rally cleaving.
+       - Post-Smash Winner Drop & Point Decoupling: Decouples post-smash dead-ball floor taps
+         only when a subsequent Point 2 exists in the cluster (with serve gap >= 2.0s, hits >= 3, and active attack).
+         Guarantees that a rally ending with a smash defense, net push, or soft high clear is preserved
+         intact without premature cutoff.
        - Inter-Point Break / Pre-Serve Gap: If gap >= 2.10s preceded by weak floor tap or followed by a serve return,
          severs the intermission cleanly before the new serve.
        - Single dead-ball tap without continuation: prunes isolated floor scoops.
@@ -328,9 +354,10 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
        - Every valid rally must feature at least one active attacking/clearing stroke (max E >= 1.8e7),
          rejecting pure floor-pickup tap clusters.
        - Prunes leading/trailing dead-ball taps, while protecting genuine opening serves followed by active returns.
-    4. Strict Zero Dead-Ball Cutoff:
+    4. Strict Multimodal Ground-Landing Guarantee:
        - s_cut = max(0.0, c[0][0] - 0.75s)  [Opening serve setup & backswing]
-       - e_cut = min(v_dur, c[-1][0] + 0.85s) [0.85s complete downward landing trajectory]
+       - e_cut: Tracks optical court motion until shuttlecock physically touches floor and players decelerate
+         (0.65s~0.85s for post-smash kills; optical motion tracked up to 2.85s for high clears/lobs).
     """
     if not peaks:
         return []
@@ -360,18 +387,24 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                 gap = c[i + 1][0] - c[i][0]
                 is_break = False
 
-                # Rule 1: Post-Smash Winner Drop (进攻制胜分与死球落地强切断)
+                # Rule 1: Post-Smash Winner Drop & Point Decoupling (进攻制胜分与下一分接发强切断)
                 # A smash occurred prior to c[i] (e.g. c[i-1] or c[i-2] was smash E >= 4.5e7,
                 # so c[i] is the defensive block or ground landing).
-                # NEVER break at c[i] if c[i] is the smash itself (flight time to defender/floor is 0.4s~1.5s).
-                # NEVER break if c[i+1] is the final stroke of the cluster (preserve final return/landing).
+                # We decouple at c[i] ONLY if c[i+1:] contains a genuine subsequent rally (Point 2):
+                # 1. Point 2 has at least 3 strokes remaining: len(c) - (i + 1) >= 3
+                # 2. Point 2 features an active attack / stroke: any(c[k][1] >= 1.8e7 for k in range(i + 1, len(c)))
+                # 3. An inter-point serve setup pause exists: any(c[k+1][0] - c[k][0] >= 2.00 for k in range(i + 1, len(c) - 1)) or gap >= 2.00
+                # 4. Immediate aftermath of c[i] is NOT active attacking play (proves c[i+1] is walking/floor taps, not immediate rally continuation):
+                #    not any(c[k][1] >= 1.8e7 for k in range(i + 1, min(len(c), i + 4)))
                 had_prior_smash = any(c[k][1] >= 4.5e7 for k in range(max(0, i - 2), i))
-                if had_prior_smash and gap >= 0.70 and c[i + 1][1] < 2.0e7 and (i + 1 < len(c) - 1):
-                    # If subsequent sequence contains no active attacking strokes (E < 1.8e7),
-                    # then c[i] was the terminal ground contact/block and c[i+1] is a dead-ball floor scoop.
-                    has_active_play_ahead = any(c[k][1] >= 1.8e7 for k in range(i + 1, min(len(c), i + 6)))
-                    if not has_active_play_ahead:
-                        is_break = True
+                if had_prior_smash and gap >= 0.70 and (i + 1 < len(c) - 1):
+                    rem_hits = len(c) - (i + 1)
+                    if rem_hits >= 3:
+                        has_p2_attack = any(c[k][1] >= 1.8e7 for k in range(i + 1, len(c)))
+                        has_p2_serve_gap = (gap >= 2.00) or any(c[k + 1][0] - c[k][0] >= 2.00 for k in range(i + 1, len(c) - 1))
+                        has_immediate_attack = any(c[k][1] >= 1.8e7 for k in range(i + 1, min(len(c), i + 4)))
+                        if has_p2_attack and has_p2_serve_gap and not has_immediate_attack:
+                            is_break = True
 
                 # Rule 2: Inter-point break / pre-serve gap
                 elif gap >= 2.10:
@@ -389,7 +422,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
                     has_continuation = False
                     if i + 2 < len(c):
                         g_next = c[i + 2][0] - c[i + 1][0]
-                        if 0.35 <= g_next <= 2.35:
+                        if 0.35 <= g_next <= 2.85:
                             has_continuation = True
                     else:
                         has_continuation = True
@@ -414,11 +447,9 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
     # 3. Rally validation & pruning
     rallies = []
     for c in decoupled:
-        # Prune isolated tail pickup tap if gap >= 2.0s
-        if len(c) >= 3:
-            times = [p[0] for p in c]
-            if (times[-1] - times[-2]) >= 2.00 and c[-1][1] < 8.0e6:
-                c = c[:-1]
+        # Prune trailing floor pickup taps if preceded by gap >= 2.00s and low energy
+        while len(c) >= 3 and (c[-1][0] - c[-2][0]) >= 2.00 and c[-1][1] < 8.0e6:
+            c = c[:-1]
 
         # Prune leading dead-ball pickup taps if gap >= 1.70s
         # BUT protect genuine opening serve: if gap <= 2.20s and c[1] is an active return or followed by active rally
@@ -438,9 +469,33 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, cap=None
             continue
 
         s_cut = max(0.0, c[0][0] - 0.75)
+        last_hit = c[-1][0]
         tail_energy = c[-1][1]
-        landing_buf = 0.65 if tail_energy >= 2.0e7 else 0.85
-        e_cut = min(v_dur, c[-1][0] + landing_buf)
+        had_smash_at_end = any(c[k][1] >= 4.5e7 for k in range(max(0, len(c) - 2), len(c)))
+
+        if had_smash_at_end:
+            landing_buf = 0.65 if tail_energy >= 2.0e7 else 0.85
+            e_cut = min(v_dur, last_hit + landing_buf)
+        elif cap is not None or vpath is not None:
+            curr_t = last_hit + 0.85
+            max_t = min(v_dur, last_hit + 2.85)
+            last_active_t = curr_t
+            while curr_t <= max_t:
+                m = sample_instant_motion(cap, fps, curr_t, vpath=vpath)
+                if m is not None:
+                    our_m, far_m, near_m, top_d, b_max = m
+                    if our_m >= 5.2 and (b_max < 16.0 or our_m >= 6.0):
+                        last_active_t = curr_t
+                    else:
+                        break
+                else:
+                    break
+                curr_t += 0.35
+            e_cut = min(v_dur, last_active_t + 0.35)
+        else:
+            landing_buf = 1.65
+            e_cut = min(v_dur, last_hit + landing_buf)
+
         dur = e_cut - s_cut
         if dur >= min_dur and len(c) >= 3:
             rallies.append({
