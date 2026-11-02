@@ -6,7 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.6.0] - 2026-11-02 (Current Release)
+## [1.7.0] - 2026-11-02 (Current Release)
+
+### 🖥️ Major Feature: Pure Local Visual Desktop GUI & Interactive Timeline Studio (`badminton_gui.py` + `gui_engine.py`)
+- **100% Pure Local Visual Video Cutting Software (纯净本地可视化桌面软件)**:
+  - Built `scripts/badminton_gui.py` and `scripts/gui_engine.py`, delivering a dark-themed visual desktop application for Windows and macOS with zero cloud/LLM bloat.
+- **Two Seamless Workflows**:
+  - **🚀 一键全自动剪辑并输出视频**: Batch processes single/multiple videos or folders directly into organized game subfolders (`第01局` / `第02局` / `第03局`) and selected modes.
+  - **🔍 先扫描时间轴 -> 双画面预览微调 -> 导出**:
+    - Interactive color-coded rally timeline canvas (green = multi-shot rallies, gold = 15s+ marathon rallies, orange = serve-kills, dashed blue = player ReID game boundaries).
+    - Dual live keyframe preview cards showing both the **Opening Serve Frame (`s_cut`)** and **Shuttle Landing End Frame (`e_cut`)**.
+    - Fine-tune start/end timestamps (`±0.5s` / `±1.0s` / `+1.5s`), toggle individual clips on/off, or manually split/merge games (`split_game_at_segment`, `merge_game_with_previous`).
+- **Cross-Platform Packaging & One-Click Launchers**:
+  - Added `启动可视化剪辑软件_Windows.bat`, `打包Windows独立EXE程序.bat` (PyInstaller standalone `.exe` builder), and `启动可视化剪辑软件_Mac.command`.
+  - Replaced hardcoded `/tmp` paths with `tempfile.gettempdir()` and added automatic Windows/macOS FFmpeg & font resolution.
+  - Added unit test suite `tests/test_gui_engine.py` (all 33 unit tests pass).
+
+---
+
+## [1.6.0] - 2026-11-02
 
 ### 🚀 Major Feature: Multi-Mode Production Engine & Specialized Workflow Suite (多模式工作流套件版)
 - **Default Mode Backward-Compatibility Guaranteed (默认模式 100% 保持现状)**:

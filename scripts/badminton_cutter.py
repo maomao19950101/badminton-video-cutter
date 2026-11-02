@@ -19,6 +19,7 @@ import subprocess
 import wave
 import shutil
 import time
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 
@@ -42,15 +43,45 @@ from modes_handler import (
     categorize_showcase_rallies,
 )
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 
-DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
-if not os.path.exists(DEFAULT_FFMPEG):
-    DEFAULT_FFMPEG = "ffmpeg"
 
-FONT = "/System/Library/Fonts/STHeiti Medium.ttc"
-if not os.path.exists(FONT):
-    FONT = "Arial"
+def resolve_ffmpeg_bin():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(base_dir)
+    candidates = [
+        os.path.join(root_dir, "bin", "ffmpeg.exe"),
+        os.path.join(base_dir, "bin", "ffmpeg.exe"),
+        os.path.join(root_dir, "ffmpeg.exe"),
+        os.path.join(root_dir, "bin", "ffmpeg"),
+        "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg",
+    ]
+    if getattr(sys, "frozen", False):
+        exe_dir = os.path.dirname(sys.executable)
+        candidates.insert(0, os.path.join(exe_dir, "bin", "ffmpeg.exe"))
+        candidates.insert(1, os.path.join(exe_dir, "ffmpeg.exe"))
+        candidates.insert(2, os.path.join(exe_dir, "bin", "ffmpeg"))
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    which_ff = shutil.which("ffmpeg")
+    return which_ff if which_ff else "ffmpeg"
+
+
+def resolve_font_path():
+    candidates = [
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/simhei.ttf",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return "Arial"
+
+
+DEFAULT_FFMPEG = resolve_ffmpeg_bin()
+FONT = resolve_font_path()
 
 
 def extract_audio_wav(video_path, wav_path, ffmpeg_bin=DEFAULT_FFMPEG):
@@ -860,7 +891,7 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
-    temp_audio_dir = "/tmp/badminton_audio_cache"
+    temp_audio_dir = os.path.join(tempfile.gettempdir(), "badminton_audio_cache")
     os.makedirs(temp_audio_dir, exist_ok=True)
 
     videos = []
@@ -1123,7 +1154,7 @@ def main():
                         hud_out = os.path.join(hud_dir, hud_name)
                         dur = get_video_duration(clip_p, args.ffmpeg)
                         # Extract audio peaks for clip
-                        clip_wav = f"/tmp/{os.path.basename(clip_p)}.wav"
+                        clip_wav = os.path.join(tempfile.gettempdir(), f"{os.path.basename(clip_p)}.wav")
                         extract_audio_wav(clip_p, clip_wav, args.ffmpeg)
                         c_peaks = detect_hits(clip_wav, th_val=5.0e6)
                         verified = verify_multimodal_shots(c_peaks)
