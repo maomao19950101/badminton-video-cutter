@@ -35,7 +35,7 @@ from match_segmenter import (
     partition_rallies_by_game
 )
 
-__version__ = "1.4.7"
+__version__ = "1.4.8"
 
 DEFAULT_FFMPEG = "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg"
 if not os.path.exists(DEFAULT_FFMPEG):
@@ -390,23 +390,39 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
                 gap = c[i + 1][0] - c[i][0]
                 is_break = False
 
-                # Rule 1: Post-Smash Winner Drop & Point Decoupling (进攻制胜分与下一分接发强切断)
+                # Rule 1: Post-Smash Winner Drop & Point Decoupling (进攻制胜分与下一分接发强切断 - v1.4.8)
                 # A smash occurred prior to c[i] (e.g. c[i-1] or c[i-2] was smash E >= 4.5e7,
                 # so c[i] is the defensive block or ground landing).
-                # We decouple at c[i] ONLY if c[i+1:] contains a genuine subsequent rally (Point 2):
-                # 1. Point 2 has at least 3 strokes remaining: len(c) - (i + 1) >= 3
-                # 2. Point 2 features an active attack / stroke: any(c[k][1] >= 1.8e7 for k in range(i + 1, len(c)))
-                # 3. An inter-point serve setup pause exists: any(c[k+1][0] - c[k][0] >= 2.00 for k in range(i + 1, len(c) - 1)) or gap >= 2.00
-                # 4. Immediate aftermath of c[i] is NOT active attacking play (proves c[i+1] is walking/floor taps, not immediate rally continuation):
-                #    not any(c[k][1] >= 1.8e7 for k in range(i + 1, min(len(c), i + 4)))
+                # We decouple at c[i] ONLY if the continuation leading into the next serve is verified DEAD-BALL FLOOR TAPS:
+                # 1. Finds the next dead gap (>= 2.00s) leading into a new serve within a realistic intermission window (<= 8 hits).
+                # 2. If all intermediate gaps between c[i] and the dead gap are tight rapid badminton cadence (<= 1.15s),
+                #    or if an attacking stroke (E >= 1.8e7) exists, bilateral net/drive play is ACTIVELY CONTINUING!
+                #    (Protects rapid net touches, flat drives, drops, and pushes from being cleaved).
+                # 3. If there is NO attack AND intermediate gaps contain walking steps (any gap > 1.15s),
+                #    proves players are low-motion walking and tapping floor scoops, so we decouple cleanly at c[i].
                 had_prior_smash = any(c[k][1] >= 4.5e7 for k in range(max(0, i - 2), i))
                 if had_prior_smash and gap >= 0.70 and (i + 1 < len(c) - 1):
-                    rem_hits = len(c) - (i + 1)
-                    if rem_hits >= 3:
-                        has_p2_attack = any(c[k][1] >= 1.8e7 for k in range(i + 1, len(c)))
-                        has_p2_serve_gap = (gap >= 2.00) or any(c[k + 1][0] - c[k][0] >= 2.00 for k in range(i + 1, len(c) - 1))
-                        has_immediate_attack = any(c[k][1] >= 1.8e7 for k in range(i + 1, min(len(c), i + 4)))
-                        if has_p2_attack and has_p2_serve_gap and not has_immediate_attack:
+                    dead_gap_idx = None
+                    for k in range(i, min(len(c) - 1, i + 8)):
+                        if c[k + 1][0] - c[k][0] >= 2.00:
+                            # A true inter-point break leads into a new serve (serve return gap between 0.55s and 2.50s)
+                            # Deep high clears in mid-rally have rapid counter-attacks (gap < 0.55s), not a new serve!
+                            is_serve = True
+                            if k + 2 < len(c):
+                                g_after = c[k + 2][0] - c[k + 1][0]
+                                if g_after < 0.55 or g_after > 2.50:
+                                    is_serve = False
+                            if is_serve:
+                                dead_gap_idx = k
+                                break
+
+                    if dead_gap_idx is not None and dead_gap_idx > i:
+                        inter_energies = [c[m][1] for m in range(i + 1, dead_gap_idx + 1)]
+                        has_attack = any(e >= 1.8e7 for e in inter_energies)
+                        inter_gaps = [c[m + 1][0] - c[m][0] for m in range(i, dead_gap_idx)]
+                        is_rapid_net_play = len(inter_gaps) >= 2 and all(g <= 1.15 for g in inter_gaps)
+
+                        if not has_attack and not is_rapid_net_play:
                             is_break = True
 
                 # Rule 2: Inter-point break / pre-serve gap

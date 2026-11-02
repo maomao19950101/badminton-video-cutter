@@ -242,6 +242,60 @@ class TestRallyDecoupling(unittest.TestCase):
         self.assertAlmostEqual(r["first_hit"], 715.32, places=2)
         self.assertAlmostEqual(r["last_hit"], 734.21, places=2)
 
+    def test_preserve_net_exchange_after_smash_defense(self):
+        """
+        Tests that an active rally where a smash is defended and immediately followed
+        by a rapid net exchange / flat drive counter-attack (all gaps <= 1.15s, soft touch)
+        is preserved intact in its entirety without premature severance at the smash defense.
+        (Fix for Rally 03 in v1.4.8).
+        Simulated sequence representing Rally 03 from Match 2:
+        - 51.09: Serve (E=1.95e7)
+        - 53.15: Return (E=1.59e7)
+        - 54.565: Counter (E=5.15e6)
+        - 55.425: Drive (E=6.65e6)
+        - 56.72: Push (E=1.11e7)
+        - 57.09: Setup (E=1.07e7)
+        - 57.445: Smash (E=7.80e7)
+        - 58.335: Defensive block (gap=0.89s, E=9.61e6)
+        - 59.200: Counter-drive (gap=0.865s, E=7.82e6)
+        - 59.605: Net tap (gap=0.405s, E=7.37e6)
+        - 60.470: Lift (gap=0.865s, E=7.68e6)
+        - 60.835: Fast push (gap=0.365s, E=1.24e7)
+        - 61.750: Block / floor landing (gap=0.915s, E=4.62e6)
+        - 64.340: Dead-ball floor tap (gap=2.59s, E=6.75e6)
+        - 66.575: Next serve (gap=2.235s, E=4.04e7)
+        """
+        peaks = [
+            (51.090, 1.95e7),
+            (53.150, 1.59e7),
+            (54.565, 5.15e6),
+            (55.425, 6.65e6),
+            (56.720, 1.11e7),
+            (57.090, 1.07e7),
+            (57.445, 7.80e7),
+            (58.335, 9.61e6),
+            (59.200, 7.82e6),
+            (59.605, 7.37e6),
+            (60.470, 7.68e6),
+            (60.835, 1.24e7),
+            (61.750, 4.62e6),
+            (64.340, 6.75e6),
+            (66.575, 4.04e7),
+            (68.735, 4.59e7),
+            (69.315, 5.20e6),
+            (69.790, 1.18e7),
+            (70.185, 4.32e7),
+        ]
+        v_dur = 1812.0
+        rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=5)
+        self.assertTrue(len(rallies) >= 2, f"Expected at least 2 rallies, got {len(rallies)}")
+        r3 = rallies[0]
+        self.assertEqual(r3["hits"], 13, f"Rally 03 must preserve all 13 hits, got {r3['hits']}")
+        self.assertAlmostEqual(r3["first_hit"], 51.09, places=2)
+        self.assertAlmostEqual(r3["last_hit"], 61.75, places=2)
+        self.assertTrue(r3["s_cut"] <= 51.09)
+        self.assertTrue(r3["e_cut"] >= 61.75 + 0.85)
+
     def test_preserve_soft_finish_after_smash(self):
         """
         Tests that a rally containing a smash followed by defensive block,

@@ -6,7 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.7] - 2026-11-02 (Current Release)
+## [1.4.8] - 2026-11-02 (Current Release)
+
+### 🚀 Major Fix: Post-Smash Net Exchange & Bilateral Counter-Attack Preservation (杀球防守反击与网前快节奏相持彻底保全版)
+- **Eliminated False Premature Cleaving in Rule 1 (彻底消除杀球防守起球后的中途腰斩)**:
+  - Fixed a fundamental flaw in Rule 1 where any smash followed by non-smash strokes (net touches, flat drives, pushes, drops) was falsely cleaved because the forward-search heuristic scanned across the entire match for far-future gaps $\ge 2.0\text{s}$.
+  - Replaced the flawed forward search with **Local Bilateral Cadence Validation**: intermediate hits between a smash defense and the subsequent dead gap are analyzed locally. If all consecutive intervals are rapid continuous badminton cadence ($\le 1.15\text{s}$) or feature attacking/clearing strokes, active play is recognized as actively ongoing and is protected from premature severance.
+  - Resolved `多拍03` in Match 2 (`051`): extended from premature 8.86s (00分50秒至00分59秒, 8 hits) to complete 13.06s (00分50秒至01分03秒, 13 hits), capturing the serve, return, smash, diving defense, counter-drive, rapid net kill, lift, fast push, and final court landing!
+- **Dataset-Wide Automated Health Audit (全视频深度健康巡检与零异常保障)**:
+  - Executed automated cross-match health audits across all recordings (Match 1 `050`, Match 2 `051`, Match 3 `052`).
+  - Confirmed 100% clean rallies: zero premature terminations, zero short-duration anomalies ($< 5.0\text{s}$), and zero dead-ball walking clips.
+  - Passes all 20 unit tests in `tests/test_rally_decoupling.py`.
+
+---
+
+## [1.4.7] - 2026-11-02
 
 ### 🚀 Major Fix: Multi-Shot Broadcast Threshold & Dead-Ball Ball-Retrieval Elimination (专业多拍标准与死球捡球彻底过滤版)
 - **Multi-Shot Broadcast Threshold Enforcement (`--min-hits 5`·杜绝低拍数死球伪多拍)**:
