@@ -43,7 +43,7 @@ from modes_handler import (
     categorize_showcase_rallies,
 )
 
-__version__ = "1.8.1"
+__version__ = "1.8.2"
 
 
 def resolve_ffmpeg_bin():
@@ -568,6 +568,27 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
         max_energy = max(p[1] for p in c)
         if max_energy < 1.8e7:
             continue
+
+        # Rule 4: Pre-Serve Stationary Boundary & True Serve Anchoring (发球静止定界与真发球锚定 - v1.8.2)
+        # In badminton rules (Rule 9.1), server & receiver must remain stationary in service boxes before serve.
+        # Optical motion drops to a stationary trough (near <= 8.5, our <= 8.5) right before the serve,
+        # followed by an active court motion surge (near >= 12.0 or our >= 10.0) upon serve and return.
+        # If the cluster starts with hits where near court is dormant (near < 8.0) or players are walking,
+        # seeks forward to the first authentic serve preceded by a stationary trough, pruning leading adjacent-court acoustic noise.
+        if (cap is not None or (vpath and os.path.exists(vpath))) and len(c) >= min_hits + 1:
+            for k in range(min(len(c) - min_hits, 8)):
+                t_k = c[k][0]
+                m_after = sample_instant_motion(cap, fps, t_k + 0.8, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
+                if m_after is None:
+                    break
+                our_after, far_after, near_after, _, _ = m_after
+                is_active = (near_after >= 12.0 or our_after >= 12.0)
+                if is_active:
+                    if k > 0:
+                        m_pre = sample_instant_motion(cap, fps, t_k - 0.75, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
+                        if m_pre is not None and (m_pre[2] <= 8.5 or m_pre[0] <= 8.5):
+                            c = c[k:]
+                    break
 
         s_cut = max(0.0, c[0][0] - 0.75)
         last_hit = c[-1][0]

@@ -426,6 +426,50 @@ class TestRallyDecoupling(unittest.TestCase):
         has_scoop_rally = any(abs(r["first_hit"] - 279.00) < 0.5 or abs(r["first_hit"] - 280.42) < 0.5 for r in rallies)
         self.assertFalse(has_scoop_rally, "Floor scoop taps during ball change must not form a rally")
 
+    def test_anchor_rally_start_to_serve_pruning_adjacent_noise(self):
+        """
+        Tests that when adjacent-court acoustic hits bleed into the start of a rally
+        while our court players are walking / taking service stance,
+        Rule 4 (Pre-Serve Stationary Boundary & Serve Anchoring) detects the pre-serve
+        stationary pause and explosive surge, pruning leading adjacent-court hits.
+        """
+        from unittest.mock import patch
+
+        # Simulated cluster representing Match 2 Game 3 Clip 1:
+        # First 3 hits: adjacent court noise (588.85, 590.22, 592.50) while our players walk
+        # Authentic serve: 598.54
+        # Followed by 5 active rally hits
+        peaks = [
+            (588.85, 1.2e7),
+            (590.22, 1.1e7),
+            (592.50, 1.3e7),
+            (598.54, 2.5e7), # Genuine serve
+            (599.09, 3.1e7), # Return
+            (601.20, 4.5e7), # Smash
+            (602.10, 2.2e7), # Drive
+            (603.35, 1.8e7), # Kill
+        ]
+
+        def mock_motion(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            # If sampling before or after the genuine serve at 598.54:
+            if t_sec < 598.0:
+                # Walking or stationary pause (near <= 7.0, our <= 7.5)
+                return (6.5, 7.0, 6.0, 1.0, 3.0)
+            else:
+                # Active play surge after serve (near >= 25.0, our >= 20.0)
+                return (22.0, 18.0, 25.0, 1.0, 4.0)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion):
+            rallies = extract_multi_shot_rallies(peaks, v_dur=1000.0, min_hits=5, vpath="/dummy/test.mp4")
+
+        self.assertEqual(len(rallies), 1)
+        r = rallies[0]
+        # s_cut must be anchored to the authentic serve at 598.54 - 0.75 = 597.79s
+        # NOT the adjacent court noise at 588.85 - 0.75 = 588.10s!
+        self.assertAlmostEqual(r["s_cut"], 598.54 - 0.75, places=2)
+        self.assertEqual(r["first_hit"], 598.54)
+        self.assertEqual(r["hits"], 5)
+
 
 if __name__ == "__main__":
     unittest.main()
