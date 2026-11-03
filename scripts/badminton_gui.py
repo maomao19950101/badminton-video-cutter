@@ -1852,7 +1852,13 @@ def main():
     parser = argparse.ArgumentParser(description="羽毛球 AI 视频剪辑大师 · Codex UI 可视化桌面版")
     parser.add_argument("--self-test", action="store_true", help="Run automated GUI initialization & Dark/Light theme self-test")
     parser.add_argument("--theme", choices=["dark", "light"], default=None, help="Initial theme mode (dark or light)")
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+
+    if not args.self_test:
+        from codex_server import main as codex_main
+        sys.argv = [sys.argv[0]] + unknown
+        codex_main()
+        return
 
     root = tk.Tk()
     app = BadmintonCutterGUI(root)

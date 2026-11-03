@@ -104,8 +104,41 @@
     }
 
     /* ==========================================================================
-       Minimalist Icon Topbar (48px)
+       Minimalist Icon Topbar (48px) + Top Edge Progress Ribbon
        ========================================================================== */
+    .top-ribbon {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      z-index: 200;
+      background: transparent;
+      pointer-events: none;
+    }
+
+    .top-ribbon-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #10a37f, #34d399);
+      box-shadow: 0 0 10px rgba(16, 163, 127, 0.7);
+      transition: width 0.2s ease, opacity 0.3s ease;
+      opacity: 0;
+    }
+
+    .top-ribbon-fill.active {
+      opacity: 1;
+    }
+
+    @keyframes spinFlat {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .spin-icon {
+      animation: spinFlat 1.2s linear infinite;
+    }
+
     .topbar {
       height: 48px;
       padding: 0 18px;
@@ -351,23 +384,55 @@
       border-top: 1px solid var(--border);
     }
 
-    .progress-wrap {
-      height: 4px;
+    .progress-card {
       background: var(--bg-surface);
-      border-radius: 99px;
-      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      border-radius: 9px;
+      padding: 8px 10px;
       display: none;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    .progress-wrap.visible {
-      display: block;
+    .progress-card.visible {
+      display: flex;
+    }
+
+    .progress-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-secondary);
+      gap: 6px;
+    }
+
+    .progress-step {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .progress-pct {
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .progress-track {
+      height: 6px;
+      background: var(--bg-app);
+      border-radius: 99px;
+      overflow: hidden;
     }
 
     .progress-bar {
       height: 100%;
-      background: var(--accent);
+      background: linear-gradient(90deg, #10a37f, #34d399);
       width: 0%;
-      transition: width 0.2s ease;
+      transition: width 0.18s ease;
     }
 
     .dock-row {
@@ -822,6 +887,11 @@
     </symbol>
   </svg>
 
+  <!-- Top Edge Progress Ribbon -->
+  <div class="top-ribbon">
+    <div class="top-ribbon-fill" id="topRibbonFill"></div>
+  </div>
+
   <!-- Minimalist Icon Topbar -->
   <header class="topbar">
     <div class="brand">
@@ -834,6 +904,10 @@
         <span class="stat-pill mono" title="保留精华总时长">
           <svg class="flat-icon sm"><use href="#ic-clock"/></svg>
           <strong id="topDurVal">00:00</strong>
+        </span>
+        <span class="stat-pill mono" id="topJobPill" style="display:none; border-color:rgba(16,163,127,0.4); color:var(--accent);">
+          <svg class="flat-icon sm spin-icon" id="topJobIcon"><use href="#ic-refresh"/></svg>
+          <strong id="topJobText" style="color:var(--accent);">0%</strong>
         </span>
       </div>
     </div>
@@ -881,8 +955,14 @@
 
       <!-- 3. Bottom Action Dock -->
       <div class="sidebar-dock">
-        <div class="progress-wrap" id="progressWrap">
-          <div class="progress-bar" id="progressFill"></div>
+        <div class="progress-card" id="progressCard">
+          <div class="progress-head">
+            <span class="progress-step mono" id="progressStepText">0/0</span>
+            <span class="progress-pct mono" id="progressPctText">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-bar" id="progressFill"></div>
+          </div>
         </div>
 
         <div class="dock-row">
@@ -1127,19 +1207,48 @@
         document.getElementById("outDirInput").value = state.output_dir || "";
       }
 
-      // Progress & Export Button
+      // Progress & Export Button (Top Ribbon + Top Pill + Sidebar Progress Card)
       const job = state.job || {};
-      const pWrap = document.getElementById("progressWrap");
+      const pCard = document.getElementById("progressCard");
+      const topRibbon = document.getElementById("topRibbonFill");
+      const topJobPill = document.getElementById("topJobPill");
+      const topJobIcon = document.getElementById("topJobIcon");
+      const topJobText = document.getElementById("topJobText");
       const mainBtn = document.getElementById("mainExportBtn");
+
       if (job.is_running) {
-        pWrap.classList.add("visible");
-        const pct = Math.round(job.progress || 0);
+        const pct = Math.max(1, Math.round(job.progress || 0));
+        const cleanStatus = (job.status || "处理中").replace(/^🎉\s*/, "");
+        pCard.classList.add("visible");
         document.getElementById("progressFill").style.width = `${pct}%`;
+        document.getElementById("progressStepText").textContent = cleanStatus;
+        document.getElementById("progressPctText").textContent = `${pct}%`;
+
+        topRibbon.classList.add("active");
+        topRibbon.style.width = `${pct}%`;
+
+        topJobPill.style.display = "inline-flex";
+        topJobIcon.classList.add("spin-icon");
+        topJobIcon.innerHTML = `<use href="#ic-refresh"/>`;
+        topJobText.textContent = `${cleanStatus} · ${pct}%`;
+
         document.getElementById("exportBtnIcon").innerHTML = `<use href="#ic-stop"/>`;
         document.getElementById("exportBtnLabel").textContent = `${pct}%`;
         mainBtn.onclick = () => apiPost("/api/stop_job").then(s => renderAll(s, true));
       } else {
-        pWrap.classList.remove("visible");
+        pCard.classList.remove("visible");
+        topRibbon.classList.remove("active");
+        topRibbon.style.width = "0%";
+
+        if (job.progress >= 100) {
+          topJobPill.style.display = "inline-flex";
+          topJobIcon.classList.remove("spin-icon");
+          topJobIcon.innerHTML = `<use href="#ic-check"/>`;
+          topJobText.textContent = "100%";
+        } else {
+          topJobPill.style.display = "none";
+        }
+
         document.getElementById("exportBtnIcon").innerHTML = `<use href="#ic-export"/>`;
         document.getElementById("exportBtnLabel").textContent = "导出";
         mainBtn.onclick = () => startJob("one_click");
@@ -1626,7 +1735,7 @@
           const updated = await apiGet("/api/state");
           renderAll(updated, true);
         }
-      }, 650);
+      }, 250);
     })();
   </script>
 </body>

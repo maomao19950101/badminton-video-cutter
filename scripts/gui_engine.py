@@ -852,7 +852,7 @@ def export_video_timeline(
                 (r_idx, seg.s_cut, dur, clip_p, dur >= 15.0, match_dir, seg)
             )
 
-    _prog(15.0, f"正在高速无损导出 {len(cut_tasks)} 段多拍视频...")
+    _prog(5.0, f"导出多拍 0/{len(cut_tasks)}")
     _log(f"  ⚡ 正在并行无损导出 {len(cut_tasks)} 段多拍高清视频...")
 
     clip_paths = []
@@ -860,10 +860,20 @@ def export_video_timeline(
     seg_to_clip: Dict[int, str] = {}
 
     if cut_tasks:
+        import threading
+        _cut_lock = threading.Lock()
+        _cut_done = [0]
+        _total_cuts = max(1, len(cut_tasks))
+
         def _do_cut(task):
             c_idx, s, d, out, is_long, pdir, seg_obj = task
             if not _cancelled():
                 cut_lossless(config.ffmpeg_bin, vpath, s, d, out)
+            with _cut_lock:
+                _cut_done[0] += 1
+                cur_n = _cut_done[0]
+                pct_val = 5.0 + (cur_n / _total_cuts) * 50.0
+                _prog(pct_val, f"导出多拍 {cur_n}/{_total_cuts}")
             return c_idx, out, is_long, pdir, seg_obj.uid
 
         with ThreadPoolExecutor(max_workers=8) as executor:

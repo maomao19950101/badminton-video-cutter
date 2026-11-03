@@ -7,7 +7,7 @@ echo ============================================================
 echo   📦 正在打包【羽毛球AI剪辑大师.exe】独立 Windows 桌面程序...
 echo ============================================================
 
-python -m pip install pyinstaller numpy -i https://pypi.tuna.tsinghua.edu.cn/simple
+python -m pip install pyinstaller numpy opencv-python -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 pyinstaller --noconfirm --clean --windowed ^
     --name "羽毛球AI剪辑大师" ^
