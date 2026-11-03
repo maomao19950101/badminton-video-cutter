@@ -182,7 +182,8 @@ def sample_instant_motion(cap, fps, t_sec, vpath=None, ffmpeg_bin=DEFAULT_FFMPEG
     """
     if t_sec < 0:
         return None
-    cache_key = round(t_sec, 1)
+    v_id = vpath if vpath else (id(cap) if cap is not None else "default")
+    cache_key = (v_id, round(t_sec, 2))
     if cache_key in _MOTION_CACHE:
         return _MOTION_CACHE[cache_key]
 
@@ -283,7 +284,11 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
       1. Handheld mount/unmount camera shake (top_d > 9.0 and avg_our < 6.0) -> reject.
       2. Completely empty/dormant court (avg_our < 4.8 or max_our < 7.5) -> reject.
       3. Far court dormant / non-bilateral play (avg_far < 5.5 and max_far < 8.5) -> reject.
-      4. Adjacent court dominant motion (b_avg >= 13.0 and b_avg > 1.15 * avg_our) -> reject.
+      4. Near court dormant / non-bilateral play (max_near < 8.5 or avg_near < 5.5) -> reject.
+         In badminton doubles, players on our half-court MUST move dynamically (lunge, split-step, swing).
+         Eliminates intermissions where adjacent courts play while our players are standing/walking.
+      5. Adjacent/background court dominant motion (b_avg >= 13.0 and b_avg > 1.15 * avg_our,
+         or avg_near < 6.2 with avg_far >= 16.0) -> reject.
     """
     dur = e_cut - s_cut
     if dur < min_dur:
@@ -291,7 +296,9 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     hit_count = len(r_peaks) if r_peaks else 0
     if hit_count < min_hits:
         return False
-    if cap is None and not vpath:
+    if cap is None and not (vpath and os.path.exists(vpath)):
+        return True
+    if not HAS_CV2 and not (vpath and os.path.exists(vpath)):
         return True
 
     # 1. Opening serve & cadence verification (eliminates adjacent court rallies bleed during intermissions)
@@ -314,6 +321,8 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     max_our = float(max([m[0] for m in motions]))
     avg_far = float(np.mean([m[1] for m in motions]))
     max_far = float(max([m[1] for m in motions]))
+    avg_near = float(np.mean([m[2] for m in motions]))
+    max_near = float(max([m[2] for m in motions]))
     top_d_max = float(max([m[3] for m in motions]))
     b_avg = float(np.mean([m[4] for m in motions]))
 
@@ -326,8 +335,15 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     # Far court dormant (players standing around waiting, drinking water, changing balls)
     if avg_far < 5.5 and max_far < 8.5:
         return False
+    # Near court dormant: In badminton doubles, near court players MUST exhibit active footwork!
+    # If near court maximum motion never reached active footwork threshold, near players never hit a ball.
+    if max_near < 8.5 or avg_near < 5.5:
+        return False
     # Adjacent court dominant motion (Court 7 active while our court is scooping balls)
     if b_avg >= 13.0 and b_avg > 1.15 * avg_our:
+        return False
+    # Background/Adjacent court dominant motion while near court is sluggish
+    if avg_near < 6.2 and (b_avg >= 11.0 or avg_far >= 16.0):
         return False
     return True
 
@@ -913,6 +929,9 @@ def main():
         "VID_20261029_203442_050": "01_场次一_双打实战_050",
         "VID_20261029_203442_051": "02_场次二_双打实战_051",
         "VID_20261029_203442_052": "03_场次三_双打实战_052",
+        "VID_20261102_215941_046": "01_场次一_双打实战_046",
+        "VID_20261102_215941_047": "02_场次二_双打实战_047",
+        "VID_20261102_215941_048": "03_场次三_双打实战_048",
     }
     zh_nums = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
 
@@ -997,17 +1016,16 @@ def main():
                         prev_r = valid_rallies[-1]
                         turnaround = s_cut - prev_r["e_cut"]
                         hit_gap = r_peaks[0][0] - prev_r["peaks"][-1][0]
-                        if turnaround < 3.0:
-                            prev_had_smash = any(prev_r["peaks"][k][1] >= 4.5e7 for k in range(max(0, len(prev_r["peaks"]) - 2), len(prev_r["peaks"])))
-                            if hit_gap <= 2.20 and not (prev_had_smash and prev_r["peaks"][-1][1] >= 2.0e7):
-                                prev_r["e_cut"] = e_cut
-                                prev_r["dur"] = prev_r["e_cut"] - prev_r["s_cut"]
-                                prev_r["peaks"].extend(r_peaks)
-                                print(f"    🏸 [合并连续多拍] 合并至上一回合: 新区间 {format_time_zh(prev_r['s_cut'])}至{format_time_zh(prev_r['e_cut'])} ({prev_r['dur']:.1f}s)")
-                                continue
-                            elif turnaround < 0.50 and hit_gap < 2.50:
-                                print(f"    🚫 [过滤分间杂音] 跳过分间捡球/换球片段: {format_time_zh(s_cut)}至{format_time_zh(e_cut)} (距上一分仅 {turnaround:.2f}s)")
-                                continue
+                        # Inter-rally reset turnaround & cleaved rally healing (v1.5.0)
+                        if turnaround < 0.60 and hit_gap <= 1.15 and prev_r["dur"] < 25.0 and dur < 25.0:
+                            prev_r["e_cut"] = e_cut
+                            prev_r["dur"] = prev_r["e_cut"] - prev_r["s_cut"]
+                            prev_r["peaks"].extend(r_peaks)
+                            print(f"    🏸 [拼接微隙多拍] 拼接被轻微切断的连贯回合: 新区间 {format_time_zh(prev_r['s_cut'])}至{format_time_zh(prev_r['e_cut'])} ({prev_r['dur']:.1f}s)")
+                            continue
+                        elif turnaround < 0.30 and hit_gap < 1.80:
+                            print(f"    🚫 [过滤分间杂音] 跳过分间捡球/换球片段: {format_time_zh(s_cut)}至{format_time_zh(e_cut)} (距上一分仅 {turnaround:.2f}s)")
+                            continue
 
                     valid_rallies.append({
                         "s_cut": s_cut,

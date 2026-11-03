@@ -135,9 +135,10 @@ class StudioState:
             pass
 
     def _auto_load_default_videos(self):
-        default_in = "/Users/harry/视频/1029"
-        if os.path.isdir(default_in):
-            self.import_folder(default_in)
+        for candidate in ["/Users/harry/视频/1102", "/Users/harry/视频/1029"]:
+            if os.path.isdir(candidate):
+                self.import_folder(candidate)
+                break
 
     def add_log(self, msg: str):
         with self.lock:
