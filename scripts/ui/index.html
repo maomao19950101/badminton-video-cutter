@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Codex Studio · 羽毛球 AI 视频剪辑大师 v1.8.0</title>
+  <link rel="icon" type="image/png" href="/api/icon" />
   <style>
     /* ==========================================================================
        OpenAI Codex Design System Tokens (Dark & Light Modes)
@@ -109,16 +110,13 @@
     }
 
     .brand-logo {
-      width: 28px;
-      height: 28px;
-      border-radius: 7px;
-      background: var(--accent-emerald);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      object-fit: cover;
+      box-shadow: 0 2px 6px rgba(16, 163, 127, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      flex-shrink: 0;
     }
 
     .brand-title {
@@ -592,7 +590,7 @@
   <!-- Top Codex Navigation Bar -->
   <header class="header">
     <div class="brand">
-      <div class="brand-logo">🏸</div>
+      <img src="/api/icon" alt="猫猫羽毛球" class="brand-logo" />
       <span class="brand-title">羽毛球 AI 视频剪辑大师</span>
       <span class="badge badge-emerald mono" id="verBadge">v1.8.0 · Codex Studio</span>
       <span class="badge mono" id="hwBadge">⚡ h264_videotoolbox</span>

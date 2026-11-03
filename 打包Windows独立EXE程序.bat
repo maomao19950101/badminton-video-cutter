@@ -11,8 +11,10 @@ python -m pip install pyinstaller numpy -i https://pypi.tuna.tsinghua.edu.cn/sim
 
 pyinstaller --noconfirm --clean --windowed ^
     --name "羽毛球AI剪辑大师" ^
+    --icon "%~dp0assets\app_icon.ico" ^
     --paths "%~dp0scripts" ^
     --add-data "%~dp0scripts\ui\index.html;ui" ^
+    --add-data "%~dp0assets;assets" ^
     --hidden-import "badminton_cutter" ^
     --hidden-import "match_segmenter" ^
     --hidden-import "modes_handler" ^

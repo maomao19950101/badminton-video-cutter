@@ -13,6 +13,8 @@ scripts_dir = os.path.join(root_dir, "scripts")
 
 datas = [
     (os.path.join(scripts_dir, "ui", "index.html"), "ui"),
+    (os.path.join(root_dir, "assets", "app_icon.png"), "assets"),
+    (os.path.join(root_dir, "assets", "app_icon.ico"), "assets"),
 ]
 if os.path.exists(os.path.join(root_dir, "bin", "ffmpeg.exe")):
     datas.append((os.path.join(root_dir, "bin", "ffmpeg.exe"), "bin"))
@@ -57,6 +59,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=os.path.join(root_dir, "assets", "app_icon.ico"),
 )
 
 coll = COLLECT(

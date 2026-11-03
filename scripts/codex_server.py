@@ -58,8 +58,27 @@ def _resolve_ui_html_path() -> str:
     return candidates[0]
 
 
+def _resolve_asset_path(filename: str) -> str:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    skill_root = os.path.dirname(base_dir)
+    candidates = [
+        os.path.join(skill_root, "assets", filename),
+        os.path.join(base_dir, "assets", filename),
+    ]
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+        candidates.insert(0, os.path.join(meipass, "assets", filename))
+        candidates.insert(1, os.path.join(os.path.dirname(sys.executable), "assets", filename))
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
 PREFS_PATH = os.path.join(tempfile.gettempdir(), "badminton_gui_preferences.json")
 UI_HTML_PATH = _resolve_ui_html_path()
+APP_ICON_PNG_PATH = _resolve_asset_path("app_icon.png")
+APP_ICON_ICO_PATH = _resolve_asset_path("app_icon.ico")
 
 
 class StudioState:
@@ -328,8 +347,40 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
             self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(content)
+            return
+
+        if route in ("/api/icon", "/app_icon.png"):
+            if not os.path.exists(APP_ICON_PNG_PATH):
+                self.send_error(404, "App icon not found")
+                return
+            with open(APP_ICON_PNG_PATH, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "max-age=3600")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
+        if route == "/favicon.ico":
+            icon_file = APP_ICON_ICO_PATH if os.path.exists(APP_ICON_ICO_PATH) else APP_ICON_PNG_PATH
+            if not os.path.exists(icon_file):
+                self.send_error(404, "Favicon not found")
+                return
+            with open(icon_file, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/x-icon" if icon_file.endswith(".ico") else "image/png")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "max-age=3600")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(data)
             return
 
         if route == "/api/state":
@@ -347,6 +398,7 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "image/jpeg")
             self.send_header("Content-Length", str(len(jpg)))
             self.send_header("Cache-Control", "max-age=30")
+            self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(jpg)
             return
@@ -385,6 +437,7 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
         if start >= file_size:
             self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
             self.send_header("Content-Range", f"bytes */{file_size}")
+            self.send_header("Connection", "close")
             self.end_headers()
             return
 
@@ -393,6 +446,7 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Length", str(chunk_len))
+        self.send_header("Connection", "close")
         if status == HTTPStatus.PARTIAL_CONTENT:
             self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.end_headers()
@@ -624,9 +678,11 @@ def find_free_port(preferred: int = 18765) -> int:
 
 def open_standalone_app_window(url: str):
     """
-    Launches the Codex Studio UI in a standalone, chromeless desktop app window
-    (using Chrome/Edge `--app=` mode with an isolated profile so it opens as a true
-    standalone desktop window with exact dimensions, falling back to default browser).
+    Launches the Codex Studio UI in a standalone desktop app window:
+    - On macOS: opens the native `羽毛球AI剪辑大师.app` Cocoa/WKWebView app bundle
+      (with the Cat+Badminton Dock icon) and brings it to the foreground, falling back
+      to Chrome/Edge app mode and activating the window.
+    - On Windows: opens Edge/Chrome `--app=` mode with an isolated profile.
     """
     profile_dir = os.path.join(tempfile.gettempdir(), "badminton_codex_app_profile")
     os.makedirs(profile_dir, exist_ok=True)
@@ -640,15 +696,24 @@ def open_standalone_app_window(url: str):
     ]
     sys_name = platform.system()
     if sys_name == "Darwin":
-        chrome_bins = [
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        native_app = os.path.expanduser("~/Desktop/羽毛球AI剪辑大师.app")
+        if os.path.exists(native_app):
+            subprocess.Popen(
+                ["open", "-a", native_app, "--args", f"--url={url}"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        chrome_apps = [
+            "Google Chrome",
+            "Microsoft Edge",
+            "Brave Browser",
         ]
-        for cbin in chrome_bins:
-            if os.path.exists(cbin):
+        for app_name in chrome_apps:
+            app_bundle = f"/Applications/{app_name}.app"
+            if os.path.exists(app_bundle):
                 subprocess.Popen(
-                    [cbin] + common_flags,
+                    ["open", "-na", app_bundle, "--args"] + common_flags,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
