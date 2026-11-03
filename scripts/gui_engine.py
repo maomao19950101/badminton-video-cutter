@@ -295,7 +295,7 @@ class VideoTimeline:
 
     def to_dict(self) -> dict:
         return {
-            "version": "1.7.0",
+            "version": "1.8.1",
             "video_path": self.video_path,
             "display_name": self.display_name,
             "folder_name": self.folder_name,

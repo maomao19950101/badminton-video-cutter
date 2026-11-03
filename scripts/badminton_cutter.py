@@ -43,7 +43,7 @@ from modes_handler import (
     categorize_showcase_rallies,
 )
 
-__version__ = "1.7.0"
+__version__ = "1.8.1"
 
 
 def resolve_ffmpeg_bin():
