@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller Spec for 羽毛球AI剪辑大师 (Windows 64-bit Standalone Edition v1.7.0)
+PyInstaller Spec for 羽毛球AI剪辑大师 (Codex Studio Windows 64-bit Standalone Edition v1.8.0)
 Build command on Windows:
     pyinstaller --noconfirm --clean BadmintonAICutter_Win64.spec
 """
@@ -11,12 +11,14 @@ block_cipher = None
 root_dir = os.path.abspath(".")
 scripts_dir = os.path.join(root_dir, "scripts")
 
-datas = []
+datas = [
+    (os.path.join(scripts_dir, "ui", "index.html"), "ui"),
+]
 if os.path.exists(os.path.join(root_dir, "bin", "ffmpeg.exe")):
     datas.append((os.path.join(root_dir, "bin", "ffmpeg.exe"), "bin"))
 
 a = Analysis(
-    [os.path.join(scripts_dir, "badminton_gui.py")],
+    [os.path.join(scripts_dir, "codex_server.py")],
     pathex=[scripts_dir],
     binaries=[],
     datas=datas,
@@ -26,9 +28,6 @@ a = Analysis(
         "modes_handler",
         "gui_engine",
         "numpy",
-        "PIL",
-        "PIL.Image",
-        "PIL.ImageTk",
     ],
     hookspath=[],
     hooksconfig={},

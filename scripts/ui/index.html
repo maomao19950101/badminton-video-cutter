@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Codex Studio · 羽毛球 AI 视频剪辑大师 v1.8.0</title>
+  <style>
+    /* ==========================================================================
+       OpenAI Codex Design System Tokens (Dark & Light Modes)
+       ========================================================================== */
+    :root[data-theme="dark"] {
+      --bg-app: #0d0d0d;
+      --bg-header: #121212;
+      --bg-sidebar: #161616;
+      --bg-panel: #121212;
+      --bg-card: #1c1c1c;
+      --bg-well: #090909;
+      --bg-hover: #262626;
+      --bg-selected: rgba(16, 163, 127, 0.16);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.18);
+      --text-primary: #ececec;
+      --text-secondary: #9b9b9b;
+      --text-muted: #666666;
+      --btn-primary-bg: #ececec;
+      --btn-primary-fg: #0d0d0d;
+      --btn-primary-hover: #ffffff;
+      --btn-sec-bg: #242424;
+      --btn-sec-fg: #ececec;
+      --btn-sec-hover: #303030;
+      --accent-emerald: #10a37f;
+      --accent-emerald-hover: #0d8a6a;
+      --accent-amber: #f59e0b;
+      --accent-blue: #3b82f6;
+      --accent-red: #ef4444;
+      --block-disabled: #2c2c2c;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    :root[data-theme="light"] {
+      --bg-app: #f3f4f6;
+      --bg-header: #ffffff;
+      --bg-sidebar: #f9fafb;
+      --bg-panel: #ffffff;
+      --bg-card: #f9fafb;
+      --bg-well: #f1f5f9;
+      --bg-hover: #e5e7eb;
+      --bg-selected: rgba(16, 163, 127, 0.12);
+      --border: rgba(0, 0, 0, 0.08);
+      --border-strong: rgba(0, 0, 0, 0.16);
+      --text-primary: #0d0d0d;
+      --text-secondary: #52525b;
+      --text-muted: #9ca3af;
+      --btn-primary-bg: #0d0d0d;
+      --btn-primary-fg: #ffffff;
+      --btn-primary-hover: #27272a;
+      --btn-sec-bg: #ffffff;
+      --btn-sec-fg: #18181b;
+      --btn-sec-hover: #f4f4f5;
+      --accent-emerald: #10a37f;
+      --accent-emerald-hover: #0d8a6a;
+      --accent-amber: #d97706;
+      --accent-blue: #2563eb;
+      --accent-red: #dc2626;
+      --block-disabled: #d1d5db;
+      --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+      background-color: var(--bg-app);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      transition: background-color 0.16s ease, color 0.16s ease;
+    }
+
+    .mono {
+      font-family: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+    }
+
+    /* ==========================================================================
+       Top Navigation Header
+       ========================================================================== */
+    .header {
+      height: 52px;
+      background-color: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: var(--accent-emerald);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .brand-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+    }
+
+    .badge-emerald {
+      color: var(--accent-emerald);
+      border-color: rgba(16, 163, 127, 0.35);
+      background: rgba(16, 163, 127, 0.1);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ==========================================================================
+       Codex Buttons & Inputs
+       ========================================================================== */
+    button {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background-color: var(--btn-sec-bg);
+      color: var(--btn-sec-fg);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.12s ease;
+      white-space: nowrap;
+    }
+
+    button:hover {
+      background-color: var(--btn-sec-hover);
+      border-color: var(--border-strong);
+    }
+
+    button.btn-primary {
+      background-color: var(--btn-primary-bg);
+      color: var(--btn-primary-fg);
+      border-color: transparent;
+      font-weight: 600;
+    }
+
+    button.btn-primary:hover {
+      background-color: var(--btn-primary-hover);
+    }
+
+    button.btn-emerald {
+      background-color: var(--accent-emerald);
+      color: #ffffff;
+      border-color: transparent;
+      font-weight: 600;
+    }
+
+    button.btn-emerald:hover {
+      background-color: var(--accent-emerald-hover);
+    }
+
+    button.btn-danger {
+      background-color: rgba(239, 68, 68, 0.14);
+      color: var(--accent-red);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    button.btn-danger:hover {
+      background-color: var(--accent-red);
+      color: #ffffff;
+    }
+
+    button.btn-sm {
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 5px;
+    }
+
+    input[type="text"], select {
+      background: var(--bg-well);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    input[type="text"]:focus, select:focus {
+      border-color: var(--accent-emerald);
+    }
+
+    /* ==========================================================================
+       Main Split Workspace
+       ========================================================================== */
+    .workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Left Sidebar */
+    .sidebar {
+      width: 390px;
+      background-color: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 12px 14px;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .sec-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .video-list {
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 128px;
+      overflow-y: auto;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .video-item {
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .video-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .video-item.active {
+      background: var(--bg-selected);
+      border-color: rgba(16, 163, 127, 0.4);
+      font-weight: 600;
+    }
+
+    .mode-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .mode-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 7px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .mode-card:hover {
+      border-color: var(--border-strong);
+    }
+
+    .mode-card label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .slider-row span.lbl {
+      color: var(--text-secondary);
+      width: 145px;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent-emerald);
+    }
+
+    .slider-row span.val {
+      width: 42px;
+      text-align: right;
+      color: var(--accent-emerald);
+      font-weight: 600;
+    }
+
+    /* Right Studio Main Area */
+    .studio {
+      flex: 1;
+      background-color: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .command-bar {
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .cmd-left, .cmd-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Timeline Section */
+    .timeline-box {
+      padding: 10px 16px 6px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .timeline-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    canvas#timelineCanvas {
+      width: 100%;
+      height: 86px;
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: block;
+      cursor: pointer;
+    }
+
+    /* Three-Card Visual Inspector (60fps Player + Start Frame + End Frame) */
+    .inspector-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr 1fr;
+      gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .preview-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .preview-card-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .media-stage {
+      width: 100%;
+      height: 172px;
+      background: #000;
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .media-stage video, .media-stage img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .tune-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+    }
+
+    /* Rally Table Section */
+    .table-sec {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 8px 16px;
+      overflow: hidden;
+    }
+
+    .table-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      flex-shrink: 0;
+    }
+
+    .filter-pills {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .filter-pill {
+      padding: 3px 9px;
+      font-size: 11px;
+      border-radius: 999px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+    }
+
+    .filter-pill.active {
+      background: var(--accent-emerald);
+      color: #fff;
+      border-color: transparent;
+      font-weight: 600;
+    }
+
+    .table-wrap {
+      flex: 1;
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-weight: 600;
+      padding: 7px 10px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      z-index: 2;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    tbody tr:hover {
+      background: var(--bg-hover);
+    }
+
+    tbody tr.selected {
+      background: var(--bg-selected);
+    }
+
+    tbody tr.disabled-row {
+      opacity: 0.45;
+    }
+
+    tbody td {
+      padding: 6px 10px;
+      text-align: center;
+    }
+
+    /* Bottom Console & Progress Footer */
+    .footer {
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .progress-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 7px;
+      background: var(--bg-well);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent-emerald);
+      width: 0%;
+      transition: width 0.2s ease;
+    }
+
+    .log-box {
+      height: 54px;
+      background: var(--bg-well);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 8px;
+      overflow-y: auto;
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Codex Navigation Bar -->
+  <header class="header">
+    <div class="brand">
+      <div class="brand-logo">🏸</div>
+      <span class="brand-title">羽毛球 AI 视频剪辑大师</span>
+      <span class="badge badge-emerald mono" id="verBadge">v1.8.0 · Codex Studio</span>
+      <span class="badge mono" id="hwBadge">⚡ h264_videotoolbox</span>
+    </div>
+
+    <div class="header-actions">
+      <span style="font-size:11px; color:var(--text-secondary); margin-right:4px;">一键预设:</span>
+      <button class="btn-sm" onclick="applyPreset('default')">🏆 默认球局多拍</button>
+      <button class="btn-sm" onclick="applyPreset('condensed')">⏱️ 纯享紧凑长片</button>
+      <button class="btn-sm" onclick="applyPreset('vertical')">📱 抖音 9:16 竖屏</button>
+      <button class="btn-sm" onclick="applyPreset('grand_slam')">🌟 全模式大满贯</button>
+      <button class="btn-sm btn-primary" id="themeBtn" onclick="toggleTheme()" style="margin-left:8px;">
+        ☀️ Light 模式
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Split Workspace -->
+  <div class="workspace">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <!-- 01 Video Queue -->
+      <div>
+        <div class="sec-title">
+          <span>01 / 待剪辑视频队列</span>
+          <span class="mono" id="queueCountLbl">0 个视频</span>
+        </div>
+        <div style="display:flex; gap:5px; margin-bottom:6px;">
+          <button class="btn-primary btn-sm" onclick="browseNative('files')">＋ 添加视频</button>
+          <button class="btn-sm" onclick="browseNative('folder')">📁 导入文件夹</button>
+          <button class="btn-sm" onclick="clearVideos()">清空</button>
+        </div>
+        <div class="video-list" id="videoList"></div>
+
+        <div style="margin-top:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <span style="font-size:11px; color:var(--text-secondary);">输出目录</span>
+            <div style="display:flex; gap:4px;">
+              <button class="btn-sm" onclick="browseNative('output')">选择...</button>
+              <button class="btn-sm" onclick="openOutputFolder()">打开目录 ↗</button>
+            </div>
+          </div>
+          <input type="text" id="outputDirInput" class="mono" style="width:100%;" onchange="savePrefs()" />
+        </div>
+      </div>
+
+      <!-- 02 Six Cutting Modes -->
+      <div>
+        <div class="sec-title">
+          <span>02 / 六大剪辑输出模式（可多选）</span>
+        </div>
+        <div class="mode-grid">
+          <div class="mode-card">
+            <label>
+              <input type="checkbox" id="mode_all" checked />
+              <span>⭐ <b>经典全能合集</b>（默认：自动换人分局 + 多拍 + 秒杀）</span>
+            </label>
+          </div>
+          <div class="mode-card">
+            <label>
+              <input type="checkbox" id="mode_condensed" />
+              <span>⏱️ <b>一刀不剪·纯享紧凑版</b>（剔除捡球，合成连贯长片）</span>
+            </label>
+          </div>
+          <div class="mode-card">
+            <label>
+              <input type="checkbox" id="mode_vertical" />
+              <span>📱 <b>竖屏短视频模式</b>（智能居中裁剪）</span>
+            </label>
+            <select id="aspectRatioSel" style="padding:2px 4px; font-size:11px;">
+              <option value="9:16">9:16</option>
+              <option value="1:1">1:1</option>
+              <option value="16:9">16:9</option>
+            </select>
+          </div>
+          <div class="mode-card">
+            <label>
+              <input type="checkbox" id="mode_solo" />
+              <span>🌟 <b>个人高光 Solo 视角</b></span>
+            </label>
+            <select id="soloPlayerSel" style="padding:2px 4px; font-size:11px;">
+              <option value="near_left">近端左半场</option>
+              <option value="near_right">近端右半场</option>
+              <option value="far_left">远端左半场</option>
+              <option value="far_right">远端右半场</option>
+            </select>
+          </div>
+          <div class="mode-card">
+            <label>
+              <input type="checkbox" id="mode_review" />
+              <span>🎓 <b>发接发前三拍切片</b>（截取开球前 3.5 秒）</span>
+            </label>
+          </div>
+          <div class="mode-card">
+            <label>
+              <input type="checkbox" id="mode_showcase" />
+              <span>💥 <b>球风分类视频库</b>（重杀突破 / 多拍拉锯 / 平抽快攻）</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 03 Parameters & Sliders -->
+      <div>
+        <div class="sec-title">
+          <span>03 / 分局与切分灵敏度参数</span>
+          <button class="btn-sm" onclick="resetDefaultParams()">重置默认</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px; margin-bottom:8px;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="opt_split_game" checked /> 自动按换人分球局
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="opt_reel" /> 拼接整场连贯合集
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="opt_hud" /> 转播级实时拍数HUD
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="opt_slowmo" /> 0.4x慢动作 & GIF
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <span class="lbl">多拍最少击球数 (拍)</span>
+          <input type="range" id="sl_min_hits" min="3" max="15" step="1" value="5" oninput="updateSliders()" />
+          <span class="val mono" id="val_min_hits">5拍</span>
+        </div>
+        <div class="slider-row">
+          <span class="lbl">多拍最短保留秒数 (s)</span>
+          <input type="range" id="sl_min_dur" min="3.0" max="15.0" step="0.5" value="5.0" oninput="updateSliders()" />
+          <span class="val mono" id="val_min_dur">5.0s</span>
+        </div>
+        <div class="slider-row">
+          <span class="lbl">换人分局休息间隔 (s)</span>
+          <input type="range" id="sl_rest_gap" min="10" max="60" step="1" value="22" oninput="updateSliders()" />
+          <span class="val mono" id="val_rest_gap">22s</span>
+        </div>
+        <div class="slider-row">
+          <span class="lbl">每局最少多拍回合数</span>
+          <input type="range" id="sl_min_game" min="3" max="20" step="1" value="8" oninput="updateSliders()" />
+          <span class="val mono" id="val_min_game">8拍</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Studio Workspace -->
+    <main class="studio">
+      <!-- Command Bar -->
+      <div class="command-bar">
+        <div class="cmd-left">
+          <button class="btn-emerald" onclick="startJob('one_click')">
+            ▶ 一键全自动剪辑并输出视频
+          </button>
+          <button class="btn-primary" onclick="startJob('scan_only')">
+            🔍 扫描 / 加载时间轴
+          </button>
+          <button onclick="startJob('export_only')">
+            🎬 导出当前微调后的视频
+          </button>
+          <button class="btn-sm" onclick="startJob('force_rescan')">
+            🔄 强制重扫
+          </button>
+        </div>
+        <div class="cmd-right">
+          <span class="badge mono" id="kpiRallies">多拍: 0</span>
+          <span class="badge mono" id="kpiGames">球局: 0</span>
+          <button class="btn-danger btn-sm" onclick="stopJob()">■ 停止</button>
+        </div>
+      </div>
+
+      <!-- Interactive Timeline Canvas -->
+      <div class="timeline-box">
+        <div class="timeline-header">
+          <span style="font-weight:600; color:var(--text-secondary);">
+            TIMELINE · 全场可视化时间轴（翡翠绿=多拍对攻 · 琥珀金=15s+超长拉锯 · 蓝虚线=换人分球局 · 支持直接拖拽边缘微调）
+          </span>
+          <span class="mono" style="color:var(--accent-emerald); font-size:11px;" id="hoverInfoLbl"></span>
+        </div>
+        <canvas id="timelineCanvas"></canvas>
+      </div>
+
+      <!-- 3-Column Visual Inspector: Live 60fps Video Player + Start Frame + End Frame -->
+      <div class="inspector-grid">
+        <!-- Card 1: 60fps HTML5 Video Player -->
+        <div class="preview-card">
+          <div class="preview-card-hdr">
+            <span style="color:var(--accent-emerald);" id="playerTitleLbl">▶ 60FPS 实况有声预览窗</span>
+            <label style="font-weight:400; color:var(--text-secondary); display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" id="loopClipChk" checked /> 循环播放本回合
+            </label>
+          </div>
+          <div class="media-stage">
+            <video id="mainVideoPlayer" controls preload="metadata"></video>
+          </div>
+          <div class="tune-bar">
+            <button class="btn-sm" onclick="playSelectedSegment()">▶ 重播本球 (Space)</button>
+            <button class="btn-sm" onclick="setPointFromPlayhead('start')">📍 设当前位置为起点</button>
+            <button class="btn-sm" onclick="setPointFromPlayhead('end')">📍 设当前位置为终点</button>
+          </div>
+        </div>
+
+        <!-- Card 2: Start Frame Snapshot -->
+        <div class="preview-card">
+          <div class="preview-card-hdr">
+            <span style="color:var(--accent-emerald);" id="startCardTitle">🟢 START · 回合起点画面 (开球前)</span>
+            <span class="mono" style="color:var(--text-secondary);" id="startTimeBadge">--:--</span>
+          </div>
+          <div class="media-stage">
+            <img id="startFrameImg" alt="回合起点画面" />
+          </div>
+          <div class="tune-bar">
+            <span style="font-size:11px; color:var(--text-secondary);">起点:</span>
+            <button class="btn-sm" onclick="adjustSelected(-1.0, 0)">-1.0s</button>
+            <button class="btn-sm" onclick="adjustSelected(-0.5, 0)">-0.5s</button>
+            <button class="btn-sm" onclick="adjustSelected(0.5, 0)">+0.5s</button>
+            <button class="btn-sm" onclick="adjustSelected(1.0, 0)">+1.0s</button>
+          </div>
+        </div>
+
+        <!-- Card 3: End Frame Snapshot -->
+        <div class="preview-card">
+          <div class="preview-card-hdr">
+            <span style="color:var(--accent-amber);" id="endCardTitle">🔴 END · 回合终点画面 (球落地瞬间)</span>
+            <span class="mono" style="color:var(--text-secondary);" id="endTimeBadge">--:--</span>
+          </div>
+          <div class="media-stage">
+            <img id="endFrameImg" alt="回合终点画面" />
+          </div>
+          <div class="tune-bar">
+            <span style="font-size:11px; color:var(--text-secondary);">终点:</span>
+            <button class="btn-sm" onclick="adjustSelected(0, -1.0)">-1.0s 剔除换球</button>
+            <button class="btn-sm" onclick="adjustSelected(0, -0.5)">-0.5s</button>
+            <button class="btn-sm" onclick="adjustSelected(0, 0.5)">+0.5s</button>
+            <button class="btn-sm" onclick="adjustSelected(0, 1.5)">+1.5s 延长救球</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rally Table & Game Split/Merge Toolbar -->
+      <div class="table-sec">
+        <div class="table-toolbar">
+          <div class="filter-pills" id="gameFilterPills">
+            <span class="filter-pill active" onclick="setGameFilter(0)">全部回合</span>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-sm" onclick="updateSegmentAction('toggle')">✓ 保留 / × 剔除 (Del)</button>
+            <button class="btn-sm" onclick="updateSegmentAction('split_game')">✂️ 从此回合拆分为新一局</button>
+            <button class="btn-sm" onclick="updateSegmentAction('merge_game')">🔗 将本局合并至上一局</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>状态</th>
+                <th>所属球局</th>
+                <th>序号</th>
+                <th>起点时间</th>
+                <th>终点时间</th>
+                <th>时长</th>
+                <th>击球拍数</th>
+                <th>类型标签</th>
+              </tr>
+            </thead>
+            <tbody id="rallyTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Bottom Progress & Log Console -->
+      <footer class="footer">
+        <div class="progress-row">
+          <span class="mono" style="color:var(--accent-emerald); font-weight:600;" id="statusTextLbl">Ready</span>
+          <span class="mono" style="color:var(--text-secondary);" id="progressPctLbl">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="log-box mono" id="logBox"></div>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    let appState = null;
+    let selectedUid = null;
+    let activeGameFilter = 0; // 0 = all, >0 = game_index, -1 = >=15s marathon
+    let loadedVideoSrcPath = null;
+    let dragMode = null; // 'start' | 'end' | null
+    let dragUid = null;
+
+    const videoEl = document.getElementById('mainVideoPlayer');
+    const canvas = document.getElementById('timelineCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function fmtZhTime(sec) {
+      sec = Math.max(0, Number(sec) || 0);
+      const m = Math.floor(sec / 60);
+      const s = Math.round(sec % 60);
+      return `${String(m).padStart(2, '0')}分${String(s).padStart(2, '0')}秒`;
+    }
+
+    function updateSliders() {
+      document.getElementById('val_min_hits').textContent = document.getElementById('sl_min_hits').value + '拍';
+      document.getElementById('val_min_dur').textContent = Number(document.getElementById('sl_min_dur').value).toFixed(1) + 's';
+      document.getElementById('val_rest_gap').textContent = document.getElementById('sl_rest_gap').value + 's';
+      document.getElementById('val_min_game').textContent = document.getElementById('sl_min_game').value + '拍';
+    }
+
+    function resetDefaultParams() {
+      document.getElementById('mode_all').checked = true;
+      document.getElementById('mode_condensed').checked = false;
+      document.getElementById('mode_vertical').checked = false;
+      document.getElementById('mode_solo').checked = false;
+      document.getElementById('mode_review').checked = false;
+      document.getElementById('mode_showcase').checked = false;
+      document.getElementById('opt_split_game').checked = true;
+      document.getElementById('opt_reel').checked = false;
+      document.getElementById('opt_hud').checked = false;
+      document.getElementById('opt_slowmo').checked = false;
+      document.getElementById('sl_min_hits').value = 5;
+      document.getElementById('sl_min_dur').value = 5.0;
+      document.getElementById('sl_rest_gap').value = 22;
+      document.getElementById('sl_min_game').value = 8;
+      updateSliders();
+    }
+
+    function applyPreset(name) {
+      document.getElementById('mode_all').checked = true;
+      document.getElementById('mode_condensed').checked = (name === 'condensed' || name === 'grand_slam');
+      document.getElementById('mode_vertical').checked = (name === 'vertical' || name === 'grand_slam');
+      document.getElementById('mode_solo').checked = (name === 'grand_slam');
+      document.getElementById('mode_review').checked = (name === 'grand_slam');
+      document.getElementById('mode_showcase').checked = (name === 'grand_slam');
+      document.getElementById('opt_split_game').checked = true;
+    }
+
+    function applyThemeUI(mode) {
+      document.documentElement.setAttribute('data-theme', mode);
+      const btn = document.getElementById('themeBtn');
+      btn.textContent = mode === 'dark' ? '☀️ Light 模式' : '🌙 Dark 模式';
+      drawTimeline();
+    }
+
+    async function toggleTheme() {
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = cur === 'dark' ? 'light' : 'dark';
+      applyThemeUI(next);
+      await fetch('/api/save_prefs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({theme_mode: next})
+      });
+    }
+
+    async function savePrefs() {
+      const outDir = document.getElementById('outputDirInput').value;
+      await fetch('/api/save_prefs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({output_dir: outDir})
+      });
+    }
+
+    async function browseNative(kind) {
+      const res = await fetch('/api/browse', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({kind})
+      });
+      const data = await res.json();
+      renderState(data, true);
+    }
+
+    async function clearVideos() {
+      const res = await fetch('/api/clear_videos', {method: 'POST', body: '{}'});
+      const data = await res.json();
+      selectedUid = null;
+      renderState(data, true);
+    }
+
+    async function openOutputFolder() {
+      const outDir = document.getElementById('outputDirInput').value;
+      await fetch('/api/open_folder', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({path: outDir})
+      });
+    }
+
+    async function selectVideo(vpath) {
+      selectedUid = null;
+      activeGameFilter = 0;
+      const res = await fetch('/api/select_video', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({path: vpath})
+      });
+      const data = await res.json();
+      renderState(data, true);
+    }
+
+    function getSelectedSegment() {
+      if (!appState || !appState.timeline || !appState.timeline.segments) return null;
+      return appState.timeline.segments.find(s => s.uid === selectedUid) || null;
+    }
+
+    function selectSegment(uid, autoPlay = true) {
+      selectedUid = uid;
+      const seg = getSelectedSegment();
+      renderTableAndFilters();
+      drawTimeline();
+      if (!seg || !appState.current_vpath) return;
+
+      const encPath = encodeURIComponent(appState.current_vpath);
+      document.getElementById('startTimeBadge').textContent = fmtZhTime(seg.s_cut);
+      document.getElementById('endTimeBadge').textContent = `${fmtZhTime(seg.e_cut)} (${(seg.e_cut - seg.s_cut).toFixed(1)}s)`;
+      const startFrameUrl = `/api/frame?path=${encPath}&t=${seg.s_cut.toFixed(2)}`;
+      document.getElementById('startFrameImg').src = startFrameUrl;
+      document.getElementById('endFrameImg').src = `/api/frame?path=${encPath}&t=${Math.max(seg.s_cut, seg.e_cut - 0.15).toFixed(2)}`;
+      document.getElementById('playerTitleLbl').textContent = `▶ 实况预览 · 回合 #${String(seg.uid).padStart(2, '0')} [第${String(seg.game_index).padStart(2, '0')}局]`;
+
+      videoEl.poster = startFrameUrl;
+      const videoUrl = `/api/video?path=${encPath}`;
+      if (loadedVideoSrcPath !== appState.current_vpath) {
+        loadedVideoSrcPath = appState.current_vpath;
+        videoEl.src = videoUrl;
+      }
+      videoEl.currentTime = seg.s_cut;
+      if (autoPlay) {
+        videoEl.play().catch(() => {});
+      }
+    }
+
+    function playSelectedSegment() {
+      const seg = getSelectedSegment();
+      if (!seg) return;
+      videoEl.currentTime = seg.s_cut;
+      videoEl.play().catch(() => {});
+    }
+
+    videoEl.addEventListener('timeupdate', () => {
+      drawTimeline();
+      const seg = getSelectedSegment();
+      if (!seg || videoEl.paused) return;
+      if (videoEl.currentTime >= seg.e_cut) {
+        if (document.getElementById('loopClipChk').checked) {
+          videoEl.currentTime = seg.s_cut;
+          videoEl.play().catch(() => {});
+        } else {
+          videoEl.pause();
+        }
+      }
+    });
+
+    async function setPointFromPlayhead(which) {
+      const seg = getSelectedSegment();
+      if (!seg) return;
+      const t = videoEl.currentTime;
+      const s_new = which === 'start' ? t : seg.s_cut;
+      const e_new = which === 'end' ? t : seg.e_cut;
+      const res = await fetch('/api/update_segment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({uid: seg.uid, action: 'set_time', s_cut: s_new, e_cut: e_new})
+      });
+      const data = await res.json();
+      renderState(data, false);
+      selectSegment(seg.uid, false);
+    }
+
+    async function adjustSelected(ds, de) {
+      const seg = getSelectedSegment();
+      if (!seg) return;
+      const res = await fetch('/api/update_segment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({uid: seg.uid, action: 'adjust_time', delta_start: ds, delta_end: de})
+      });
+      const data = await res.json();
+      renderState(data, false);
+      selectSegment(seg.uid, false);
+      videoEl.currentTime = ds !== 0 ? getSelectedSegment().s_cut : getSelectedSegment().e_cut;
+    }
+
+    async function updateSegmentAction(action, targetUid = null) {
+      const uid = targetUid || selectedUid;
+      if (!uid) return;
+      const res = await fetch('/api/update_segment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({uid, action})
+      });
+      const data = await res.json();
+      renderState(data, false);
+    }
+
+    function setGameFilter(g) {
+      activeGameFilter = g;
+      renderTableAndFilters();
+    }
+
+    function collectConfig() {
+      const modes = [];
+      if (document.getElementById('mode_all').checked) modes.push('all');
+      if (document.getElementById('mode_condensed').checked) modes.push('condensed');
+      if (document.getElementById('mode_vertical').checked) modes.push('vertical');
+      if (document.getElementById('mode_solo').checked) modes.push('solo');
+      if (document.getElementById('mode_review').checked) modes.push('review');
+      if (document.getElementById('mode_showcase').checked) modes.push('showcase');
+      if (modes.length === 0) modes.push('all');
+
+      return {
+        output_dir: document.getElementById('outputDirInput').value,
+        modes,
+        aspect_ratio: document.getElementById('aspectRatioSel').value,
+        player: document.getElementById('soloPlayerSel').value,
+        split_by_game: document.getElementById('opt_split_game').checked,
+        reel: document.getElementById('opt_reel').checked,
+        hud: document.getElementById('opt_hud').checked,
+        slowmo: document.getElementById('opt_slowmo').checked,
+        min_hits: parseInt(document.getElementById('sl_min_hits').value, 10),
+        min_duration: parseFloat(document.getElementById('sl_min_dur').value),
+        rest_gap: parseFloat(document.getElementById('sl_rest_gap').value),
+        min_rallies_per_game: parseInt(document.getElementById('sl_min_game').value, 10)
+      };
+    }
+
+    async function startJob(jobType) {
+      const res = await fetch('/api/start_job', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({job_type: jobType, config: collectConfig()})
+      });
+      const data = await res.json();
+      renderState(data, false);
+    }
+
+    async function stopJob() {
+      const res = await fetch('/api/stop_job', {method: 'POST', body: '{}'});
+      const data = await res.json();
+      renderState(data, false);
+    }
+
+    /* ==========================================================================
+       Timeline Canvas Rendering & Direct Mouse Edge Dragging
+       ========================================================================== */
+    function drawTimeline() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const w = rect.width;
+      const h = rect.height;
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      ctx.clearRect(0, 0, w, h);
+
+      const tl = appState ? appState.timeline : null;
+      if (!tl || !tl.duration || !tl.segments || tl.segments.length === 0) {
+        ctx.fillStyle = isLight ? '#9ca3af' : '#666';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('等待加载视频时间轴 · 点击上方「▶ 一键全自动剪辑并输出视频」或「🔍 扫描 / 加载时间轴」', w / 2, h / 2);
+        return;
+      }
+
+      const dur = tl.duration;
+      const padX = 16;
+      const usableW = Math.max(100, w - padX * 2);
+      const baseY = h - 20;
+
+      // Ruler baseline
+      ctx.strokeStyle = isLight ? '#d1d5db' : '#2e2e2e';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padX, baseY);
+      ctx.lineTo(w - padX, baseY);
+      ctx.stroke();
+
+      ctx.fillStyle = isLight ? '#6b7280' : '#737373';
+      ctx.font = '10px "SF Mono", Menlo, Consolas, monospace';
+      for (let i = 0; i <= 6; i++) {
+        const tVal = (dur * i) / 6;
+        const tx = padX + (usableW * i) / 6;
+        ctx.textAlign = i === 0 ? 'left' : (i === 6 ? 'right' : 'center');
+        ctx.fillText(fmtZhTime(tVal), tx, h - 5);
+      }
+
+      // Game boundary lines
+      let lastGame = null;
+      for (const seg of tl.segments) {
+        if (seg.kind === 'rally' && seg.enabled) {
+          const gx = padX + (seg.s_cut / dur) * usableW;
+          if (lastGame !== null && seg.game_index !== lastGame) {
+            ctx.save();
+            ctx.strokeStyle = isLight ? '#2563eb' : '#3b82f6';
+            ctx.setLineDash([4, 3]);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(gx, 4);
+            ctx.lineTo(gx, baseY);
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.fillStyle = isLight ? '#2563eb' : '#60a5fa';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`🏆 第${String(seg.game_index).padStart(2, '0')}局`, gx + 4, 13);
+          } else if (lastGame === null) {
+            ctx.fillStyle = isLight ? '#2563eb' : '#60a5fa';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`🏆 第${String(seg.game_index).padStart(2, '0')}局`, Math.max(padX, gx), 13);
+          }
+          lastGame = seg.game_index;
+        }
+      }
+
+      // Rally blocks
+      for (const seg of tl.segments) {
+        const sDur = Math.max(0.5, seg.e_cut - seg.s_cut);
+        const x1 = padX + (seg.s_cut / dur) * usableW;
+        const x2 = Math.max(x1 + 3.5, padX + (seg.e_cut / dur) * usableW);
+        const hRatio = Math.min(1.0, Math.max(0.32, sDur / 22.0));
+        const barH = (baseY - 20) * hRatio;
+        const y1 = baseY - barH;
+
+        if (!seg.enabled) {
+          ctx.fillStyle = isLight ? '#d1d5db' : '#2c2c2c';
+        } else if (seg.kind === 'serve_kill') {
+          ctx.fillStyle = '#f97316';
+        } else if (sDur >= 15.0) {
+          ctx.fillStyle = isLight ? '#d97706' : '#f59e0b';
+        } else {
+          ctx.fillStyle = '#10a37f';
+        }
+
+        ctx.fillRect(x1, y1, x2 - x1, barH - 1);
+
+        if (seg.uid === selectedUid) {
+          ctx.strokeStyle = isLight ? '#0d0d0d' : '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x1 - 0.5, y1 - 0.5, x2 - x1 + 1, barH);
+        }
+      }
+
+      // Red live playhead
+      if (videoEl && !isNaN(videoEl.currentTime) && videoEl.currentTime > 0) {
+        const px = padX + (videoEl.currentTime / dur) * usableW;
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px, 2);
+        ctx.lineTo(px, baseY + 2);
+        ctx.stroke();
+      }
+    }
+
+    function xToTimelineSec(clientX) {
+      if (!appState || !appState.timeline) return 0;
+      const rect = canvas.getBoundingClientRect();
+      const padX = 16;
+      const usableW = Math.max(100, rect.width - padX * 2);
+      const x = clientX - rect.left;
+      return Math.max(0, Math.min(appState.timeline.duration, ((x - padX) / usableW) * appState.timeline.duration));
+    }
+
+    function findSegmentAtClientX(clientX) {
+      if (!appState || !appState.timeline || !appState.timeline.segments) return {seg: null, edge: null};
+      const rect = canvas.getBoundingClientRect();
+      const padX = 16;
+      const usableW = Math.max(100, rect.width - padX * 2);
+      const x = clientX - rect.left;
+      const dur = appState.timeline.duration;
+
+      for (const seg of appState.timeline.segments) {
+        const x1 = padX + (seg.s_cut / dur) * usableW;
+        const x2 = Math.max(x1 + 4, padX + (seg.e_cut / dur) * usableW);
+        if (x >= x1 - 4 && x <= x2 + 4) {
+          if (Math.abs(x - x1) <= 5) return {seg, edge: 'start'};
+          if (Math.abs(x - x2) <= 5) return {seg, edge: 'end'};
+          return {seg, edge: 'body'};
+        }
+      }
+      const t = xToTimelineSec(clientX);
+      let best = null;
+      let bestDist = 1e9;
+      for (const seg of appState.timeline.segments) {
+        const mid = 0.5 * (seg.s_cut + seg.e_cut);
+        const d = Math.abs(mid - t);
+        if (d < bestDist) {
+          bestDist = d;
+          best = seg;
+        }
+      }
+      return {seg: best, edge: 'body'};
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (dragMode && dragUid) {
+        const seg = appState.timeline.segments.find(s => s.uid === dragUid);
+        if (!seg) return;
+        const t = xToTimelineSec(e.clientX);
+        if (dragMode === 'start') {
+          seg.s_cut = Math.max(0, Math.min(t, seg.e_cut - 1.0));
+        } else if (dragMode === 'end') {
+          seg.e_cut = Math.min(appState.timeline.duration, Math.max(seg.s_cut + 1.0, t));
+        }
+        drawTimeline();
+        return;
+      }
+      const {seg, edge} = findSegmentAtClientX(e.clientX);
+      if (seg) {
+        canvas.style.cursor = (edge === 'start' || edge === 'end') ? 'ew-resize' : 'pointer';
+        const dur = (seg.e_cut - seg.s_cut).toFixed(1);
+        document.getElementById('hoverInfoLbl').textContent =
+          `#${String(seg.uid).padStart(2, '0')} [第${String(seg.game_index).padStart(2, '0')}局] ${fmtZhTime(seg.s_cut)} → ${fmtZhTime(seg.e_cut)} (${dur}s · ${seg.peaks.length}拍)`;
+      }
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      const {seg, edge} = findSegmentAtClientX(e.clientX);
+      if (!seg) return;
+      if (edge === 'start' || edge === 'end') {
+        dragMode = edge;
+        dragUid = seg.uid;
+        selectSegment(seg.uid, false);
+      } else {
+        selectSegment(seg.uid, true);
+      }
+    });
+
+    window.addEventListener('mouseup', async () => {
+      if (dragMode && dragUid) {
+        const seg = appState.timeline.segments.find(s => s.uid === dragUid);
+        dragMode = null;
+        dragUid = null;
+        if (seg) {
+          const res = await fetch('/api/update_segment', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({uid: seg.uid, action: 'set_time', s_cut: seg.s_cut, e_cut: seg.e_cut})
+          });
+          const data = await res.json();
+          renderState(data, false);
+          selectSegment(seg.uid, false);
+        }
+      }
+    });
+
+    window.addEventListener('resize', drawTimeline);
+
+    /* ==========================================================================
+       DOM Rendering & Polling
+       ========================================================================== */
+    function renderTableAndFilters() {
+      const tbody = document.getElementById('rallyTableBody');
+      const filterBox = document.getElementById('gameFilterPills');
+      tbody.innerHTML = '';
+
+      const tl = appState ? appState.timeline : null;
+      if (!tl || !tl.segments) {
+        filterBox.innerHTML = '<span class="filter-pill active">全部回合 (0)</span>';
+        return;
+      }
+
+      const games = [...new Set(tl.segments.filter(s => s.kind === 'rally').map(s => s.game_index))].sort((a, b) => a - b);
+      let pillsHtml = `<span class="filter-pill ${activeGameFilter === 0 ? 'active' : ''}" onclick="setGameFilter(0)">全部回合 (${tl.segments.length})</span>`;
+      for (const g of games) {
+        const cnt = tl.segments.filter(s => s.kind === 'rally' && s.game_index === g).length;
+        pillsHtml += `<span class="filter-pill ${activeGameFilter === g ? 'active' : ''}" onclick="setGameFilter(${g})">🏆 第${String(g).padStart(2, '0')}局 (${cnt}拍)</span>`;
+      }
+      const longCnt = tl.segments.filter(s => (s.e_cut - s.s_cut) >= 15.0).length;
+      if (longCnt > 0) {
+        pillsHtml += `<span class="filter-pill ${activeGameFilter === -1 ? 'active' : ''}" onclick="setGameFilter(-1)">🔥 15s+超长拉锯 (${longCnt})</span>`;
+      }
+      filterBox.innerHTML = pillsHtml;
+
+      const filtered = tl.segments.filter(s => {
+        if (activeGameFilter === 0) return true;
+        if (activeGameFilter === -1) return (s.e_cut - s.s_cut) >= 15.0;
+        return s.kind === 'rally' && s.game_index === activeGameFilter;
+      });
+
+      for (const seg of filtered) {
+        const dur = Math.max(0.5, seg.e_cut - seg.s_cut);
+        const label = seg.kind === 'serve_kill'
+          ? '⚡ 接发一拍定死'
+          : (dur >= 15.0 ? '🔥 超长高能拉锯' : '🏸 多拍激烈对攻');
+        const tr = document.createElement('tr');
+        if (seg.uid === selectedUid) tr.className = 'selected';
+        if (!seg.enabled) tr.classList.add('disabled-row');
+        tr.onclick = () => selectSegment(seg.uid, true);
+        tr.ondblclick = () => updateSegmentAction('toggle', seg.uid);
+        tr.innerHTML = `
+          <td>${seg.enabled ? '<span style="color:var(--accent-emerald);font-weight:600;">✓ 保留</span>' : '<span style="color:var(--text-muted);">× 剔除</span>'}</td>
+          <td><span class="badge mono">${seg.kind === 'rally' ? '第' + String(seg.game_index).padStart(2, '0') + '局' : '秒杀'}</span></td>
+          <td class="mono">#${String(seg.uid).padStart(2, '0')}</td>
+          <td class="mono">${fmtZhTime(seg.s_cut)}</td>
+          <td class="mono">${fmtZhTime(seg.e_cut)}</td>
+          <td class="mono" style="font-weight:600; color:${dur >= 15 ? 'var(--accent-amber)' : 'var(--text-primary)'}">${dur.toFixed(1)}s</td>
+          <td class="mono">${seg.peaks.length}拍</td>
+          <td>${label}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function renderState(data, autoSelectFirst = false) {
+      const firstLoad = !appState;
+      appState = data;
+
+      if (firstLoad && data.theme_mode) {
+        applyThemeUI(data.theme_mode);
+      }
+      if (firstLoad && data.output_dir) {
+        document.getElementById('outputDirInput').value = data.output_dir;
+      }
+
+      document.getElementById('verBadge').textContent = `v${data.version} · Codex Studio`;
+      document.getElementById('hwBadge').textContent = `⚡ ${data.hw_encoder}`;
+      document.getElementById('queueCountLbl').textContent = `${data.videos.length} 个视频`;
+
+      // Video Queue
+      const vlist = document.getElementById('videoList');
+      vlist.innerHTML = '';
+      data.videos.forEach((v, idx) => {
+        const div = document.createElement('div');
+        div.className = 'video-item' + (v.path === data.current_vpath ? ' active' : '');
+        div.onclick = () => selectVideo(v.path);
+        const tag = v.cached ? `✓ ${v.rally_count}拍 · ${v.game_count}局` : '待扫描';
+        div.innerHTML = `
+          <span class="mono" style="overflow:hidden; text-overflow:ellipsis;">${String(idx + 1).padStart(2, '0')}. ${v.name}</span>
+          <span class="badge badge-emerald mono">${tag}</span>
+        `;
+        vlist.appendChild(div);
+      });
+
+      // KPIs
+      if (data.timeline && data.timeline.segments) {
+        const enabledRallies = data.timeline.segments.filter(s => s.kind === 'rally' && s.enabled);
+        const gamesCnt = new Set(enabledRallies.map(s => s.game_index)).size;
+        document.getElementById('kpiRallies').textContent = `有效多拍: ${enabledRallies.length} 拍`;
+        document.getElementById('kpiGames').textContent = `划分球局: ${gamesCnt} 局`;
+      }
+
+      // Job Progress & Logs
+      if (data.job) {
+        document.getElementById('statusTextLbl').textContent = data.job.status;
+        document.getElementById('progressPctLbl').textContent = `${data.job.progress.toFixed(0)}%`;
+        document.getElementById('progressFill').style.width = `${Math.min(100, Math.max(0, data.job.progress))}%`;
+        const logBox = document.getElementById('logBox');
+        logBox.innerHTML = data.job.logs.map(l => `<div>${l}</div>`).join('');
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+
+      if (autoSelectFirst && data.timeline && data.timeline.segments && data.timeline.segments.length > 0 && !selectedUid) {
+        selectSegment(data.timeline.segments[0].uid, false);
+      } else {
+        renderTableAndFilters();
+        drawTimeline();
+      }
+    }
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (videoEl.paused) videoEl.play().catch(() => {});
+        else videoEl.pause();
+      } else if (e.code === 'Delete' || e.code === 'Backspace') {
+        e.preventDefault();
+        updateSegmentAction('toggle');
+      }
+    });
+
+    async function pollState() {
+      try {
+        const res = await fetch('/api/state');
+        const data = await res.json();
+        const needInit = !appState;
+        renderState(data, needInit);
+      } catch (e) {}
+      setTimeout(pollState, 1200);
+    }
+
+    pollState();
+  </script>
+</body>
+</html>
