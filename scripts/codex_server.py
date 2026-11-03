@@ -279,7 +279,7 @@ def native_pick_dialog(kind: str) -> List[str]:
     return []
 
 
-def extract_jpeg_frame_bytes(vpath: str, t_sec: float, width: int = 480, height: int = 270) -> Optional[bytes]:
+def extract_jpeg_frame_bytes(vpath: str, t_sec: float, width: int = 960, height: int = 540) -> Optional[bytes]:
     if not vpath or not os.path.isfile(vpath):
         return None
     cmd = [
