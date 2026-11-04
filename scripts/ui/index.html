@@ -3,57 +3,59 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Badminton Studio</title>
+  <title>羽毛球比赛剪辑工作室 · Badminton Studio Pro</title>
   <link rel="icon" type="image/png" href="/api/icon" />
   <style>
     /* ==========================================================================
-       OpenAI Codex / Linear Unified Flat Icon Design System (Dark & Light)
+       Apple Pro NLE Workstation Design Tokens (Dark & Light)
+       Clean, purposeful video production suite styling.
        ========================================================================== */
     :root[data-theme="dark"] {
-      --bg-app: #0c0c0e;
-      --bg-sidebar: #121215;
-      --bg-surface: #17171b;
-      --bg-elevated: #1f1f24;
-      --bg-hover: rgba(255, 255, 255, 0.06);
-      --bg-active: rgba(16, 163, 127, 0.16);
-      --border: rgba(255, 255, 255, 0.07);
-      --border-strong: rgba(255, 255, 255, 0.15);
-      --text-primary: #f2f2f5;
-      --text-secondary: #8a8a93;
-      --text-muted: #52525b;
-      --accent: #10a37f;
-      --accent-hover: #0d8c6c;
-      --btn-primary-bg: #f2f2f5;
-      --btn-primary-fg: #0c0c0e;
-      --btn-sec-bg: rgba(255, 255, 255, 0.05);
-      --btn-sec-fg: #d4d4d8;
-      --btn-sec-hover: rgba(255, 255, 255, 0.1);
-      --amber: #f59e0b;
-      --danger: #ef4444;
+      --bg-app: #16161a;
+      --bg-panel: #1e1e24;
+      --bg-sidebar: #1a1a20;
+      --bg-surface: #22222a;
+      --bg-elevated: #2a2a34;
+      --bg-hover: rgba(255, 255, 255, 0.07);
+      --bg-active: rgba(10, 132, 255, 0.16);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.18);
+      --text-primary: #f5f5f7;
+      --text-secondary: #9898a2;
+      --text-muted: #63636b;
+      --accent: #0a84ff;
+      --accent-hover: #0071e3;
+      --btn-primary-bg: #0a84ff;
+      --btn-primary-fg: #ffffff;
+      --btn-sec-bg: rgba(255, 255, 255, 0.06);
+      --btn-sec-fg: #e4e4e7;
+      --btn-sec-hover: rgba(255, 255, 255, 0.12);
+      --amber: #ff9f0a;
+      --danger: #ff453a;
       --backdrop: rgba(0, 0, 0, 0.65);
     }
 
     :root[data-theme="light"] {
-      --bg-app: #ffffff;
-      --bg-sidebar: #f6f6f8;
-      --bg-surface: #f0f0f3;
+      --bg-app: #f5f5f7;
+      --bg-sidebar: #ffffff;
+      --bg-surface: #edeef2;
       --bg-elevated: #ffffff;
       --bg-hover: rgba(0, 0, 0, 0.05);
-      --bg-active: rgba(16, 163, 127, 0.13);
-      --border: rgba(0, 0, 0, 0.07);
-      --border-strong: rgba(0, 0, 0, 0.15);
-      --text-primary: #121215;
-      --text-secondary: #686870;
-      --text-muted: #a1a1aa;
-      --accent: #10a37f;
-      --accent-hover: #0d8c6c;
-      --btn-primary-bg: #121215;
+      --bg-active: rgba(0, 113, 227, 0.12);
+      --border: rgba(0, 0, 0, 0.08);
+      --border-strong: rgba(0, 0, 0, 0.18);
+      --text-primary: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --text-muted: #8e8e93;
+      --accent: #0071e3;
+      --accent-hover: #0058b0;
+      --btn-primary-bg: #0071e3;
       --btn-primary-fg: #ffffff;
-      --btn-sec-bg: rgba(0, 0, 0, 0.045);
-      --btn-sec-fg: #27272a;
+      --btn-sec-bg: rgba(0, 0, 0, 0.05);
+      --btn-sec-fg: #1d1d1f;
       --btn-sec-hover: rgba(0, 0, 0, 0.09);
-      --amber: #d97706;
-      --danger: #dc2626;
+      --amber: #ff9500;
+      --danger: #d70015;
       --backdrop: rgba(0, 0, 0, 0.35);
     }
 
@@ -64,7 +66,7 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang SC", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
       background: var(--bg-app);
       color: var(--text-primary);
       height: 100vh;
@@ -77,14 +79,14 @@
     }
 
     .mono {
-      font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
       font-variant-numeric: tabular-nums;
     }
 
-    /* Unified Flat SVG Icon Styling */
+    /* Professional SVG Outline Icon Styling */
     svg.flat-icon {
-      width: 17px;
-      height: 17px;
+      width: 16px;
+      height: 16px;
       stroke: currentColor;
       stroke-width: 1.85;
       stroke-linecap: round;
@@ -94,8 +96,8 @@
     }
 
     svg.flat-icon.lg {
-      width: 20px;
-      height: 20px;
+      width: 19px;
+      height: 19px;
     }
 
     svg.flat-icon.sm {
@@ -103,9 +105,7 @@
       height: 14px;
     }
 
-    /* ==========================================================================
-       Minimalist Icon Topbar (48px) + Top Edge Progress Ribbon
-       ========================================================================== */
+    /* Top Progress Ribbon */
     .top-ribbon {
       position: fixed;
       top: 0;
@@ -120,8 +120,8 @@
     .top-ribbon-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #10a37f, #34d399);
-      box-shadow: 0 0 10px rgba(16, 163, 127, 0.7);
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(10, 132, 255, 0.6);
       transition: width 0.2s ease, opacity 0.3s ease;
       opacity: 0;
     }
@@ -139,27 +139,52 @@
       animation: spinFlat 1.2s linear infinite;
     }
 
+    /* Header Bar */
     .topbar {
       height: 48px;
-      padding: 0 18px;
+      padding: 0 16px;
+      background: var(--bg-sidebar);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       flex-shrink: 0;
+      z-index: 100;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
 
     .brand-logo {
-      width: 28px;
-      height: 28px;
-      border-radius: 7px;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
       object-fit: cover;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .brand-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-tag {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 6px;
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      border-radius: 4px;
+      border: 1px solid var(--border);
     }
 
     .stat-pills {
@@ -171,12 +196,12 @@
     .stat-pill {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 3px 9px;
-      border-radius: 99px;
+      gap: 6px;
+      padding: 4px 10px;
       background: var(--bg-surface);
       border: 1px solid var(--border);
-      font-size: 11.5px;
+      border-radius: 6px;
+      font-size: 12px;
       color: var(--text-secondary);
     }
 
@@ -188,534 +213,571 @@
     .topbar-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
 
-    /* ==========================================================================
-       Flat Icon Buttons
-       ========================================================================== */
+    /* Buttons */
     button {
       font-family: inherit;
-      font-size: 12px;
-      font-weight: 500;
-      border: 1px solid transparent;
-      background: var(--btn-sec-bg);
-      color: var(--btn-sec-fg);
-      border-radius: 8px;
       cursor: pointer;
+      border: none;
+      outline: none;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: all 0.12s ease;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+      font-size: 12px;
     }
 
-    button:hover {
-      background: var(--btn-sec-hover);
+    .btn-pro {
+      padding: 6px 12px;
+      background: var(--bg-surface);
       color: var(--text-primary);
+      border: 1px solid var(--border);
+      font-weight: 500;
+    }
+
+    .btn-pro:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-strong);
+    }
+
+    .btn-pro.primary {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .btn-pro.primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
     }
 
     .icon-btn {
       width: 32px;
       height: 32px;
       padding: 0;
-      border-radius: 8px;
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .icon-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+      border-color: var(--border-strong);
     }
 
     .icon-btn.sm {
       width: 28px;
       height: 28px;
-      border-radius: 7px;
     }
 
     .icon-btn.accent {
       background: var(--accent);
       color: #ffffff;
+      border-color: var(--accent);
     }
 
     .icon-btn.accent:hover {
       background: var(--accent-hover);
     }
 
-    .icon-btn.active-keep {
-      background: rgba(16, 163, 127, 0.16);
-      color: var(--accent);
-      border-color: rgba(16, 163, 127, 0.35);
-    }
-
-    .icon-btn.skipped-keep {
-      background: var(--btn-sec-bg);
-      color: var(--text-muted);
-    }
-
-    /* ==========================================================================
-       Main Split Layout
-       ========================================================================== */
+    /* Main Split Layout */
     .layout {
-      display: flex;
       flex: 1;
+      display: flex;
       overflow: hidden;
     }
 
-    /* Slim Icon-Driven Sidebar (224px) */
+    /* Left Sidebar: 300px */
     .sidebar {
-      width: 224px;
+      width: 300px;
       background: var(--bg-sidebar);
       border-right: 1px solid var(--border);
-      padding: 14px 12px;
       display: flex;
       flex-direction: column;
-      gap: 18px;
       flex-shrink: 0;
+      overflow-y: auto;
+      gap: 16px;
+      padding: 14px;
     }
 
-    .sec-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 4px;
-      margin-bottom: 6px;
-      color: var(--text-secondary);
-    }
-
-    .video-list {
+    .sidebar-section {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      max-height: 190px;
-      overflow-y: auto;
+      gap: 8px;
     }
 
-    .video-item {
-      padding: 7px 9px;
-      border-radius: 8px;
-      font-size: 12px;
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 6px;
-      cursor: pointer;
-      color: var(--text-secondary);
-      transition: all 0.12s ease;
     }
 
-    .video-item:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-
-    .video-item.active {
-      background: var(--bg-active);
-      color: var(--text-primary);
-      font-weight: 600;
-    }
-
-    .video-item-left {
+    .video-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
       display: flex;
-      align-items: center;
-      gap: 7px;
-      min-width: 0;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    .video-title {
+    .video-card.active {
+      border-color: var(--accent);
+      background: var(--bg-active);
+    }
+
+    .video-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .video-cnt {
+    .video-meta {
       font-size: 11px;
-      color: var(--accent);
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-
-    /* 3x2 Flat Icon Mode Grid */
-    .mode-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
-
-    .mode-tile {
-      height: 54px;
-      border-radius: 10px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
       color: var(--text-secondary);
       display: flex;
-      flex-direction: column;
+      justify-content: space-between;
       align-items: center;
-      justify-content: center;
-      gap: 4px;
-      cursor: pointer;
-      transition: all 0.12s ease;
-      padding: 4px;
     }
 
-    .mode-tile span {
-      font-size: 10.5px;
+    .video-tag {
+      font-size: 10px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: rgba(10, 132, 255, 0.15);
+      color: var(--accent);
       font-weight: 500;
     }
 
-    .mode-tile:hover {
-      border-color: var(--border-strong);
-      color: var(--text-primary);
+    /* Mode Selection Cards */
+    .mode-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    .mode-tile.selected {
+    .mode-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      transition: all 0.15s ease;
+    }
+
+    .mode-item:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-strong);
+    }
+
+    .mode-item.active {
       background: var(--bg-active);
       border-color: var(--accent);
+    }
+
+    .mode-item.active .mode-name {
       color: var(--accent);
     }
 
-    .mode-tile.selected span {
-      color: var(--text-primary);
-      font-weight: 600;
+    .mode-icon-box {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
     }
 
-    /* Sidebar Bottom Action Dock */
+    .mode-item.active .mode-icon-box {
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .mode-text {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .mode-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .mode-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+    }
+
+    /* Bottom Export Console */
     .sidebar-dock {
       margin-top: auto;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
       padding-top: 12px;
       border-top: 1px solid var(--border);
     }
 
-    .progress-card {
+    .progress-box {
       background: var(--bg-surface);
-      border: 1px solid var(--border-strong);
-      border-radius: 9px;
-      padding: 8px 10px;
-      display: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
       flex-direction: column;
       gap: 6px;
     }
 
-    .progress-card.visible {
+    .progress-labels {
       display: flex;
-    }
-
-    .progress-head {
-      display: flex;
-      align-items: center;
       justify-content: space-between;
       font-size: 11px;
       color: var(--text-secondary);
-      gap: 6px;
     }
 
-    .progress-step {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: var(--text-primary);
-      font-weight: 500;
-    }
-
-    .progress-pct {
-      color: var(--accent);
-      font-weight: 700;
-      flex-shrink: 0;
-    }
-
-    .progress-track {
+    .progress-bar-bg {
       height: 6px;
-      background: var(--bg-app);
-      border-radius: 99px;
+      background: var(--bg-elevated);
+      border-radius: 3px;
       overflow: hidden;
     }
 
-    .progress-bar {
+    .progress-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, #10a37f, #34d399);
       width: 0%;
-      transition: width 0.18s ease;
-    }
-
-    .dock-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.2s ease;
     }
 
     .btn-export-main {
-      flex: 1;
-      height: 36px;
-      background: var(--btn-primary-bg);
-      color: var(--btn-primary-fg);
-      border-radius: 9px;
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 13px;
       font-weight: 600;
-      font-size: 12.5px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(10, 132, 255, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     .btn-export-main:hover {
-      opacity: 0.92;
-      background: var(--btn-primary-bg);
-      color: var(--btn-primary-fg);
+      background: var(--accent-hover);
     }
 
-    /* ==========================================================================
-       Right Main Stage (Cinema Player + Timeline + Visual Chip Grid)
-       ========================================================================== */
+    .btn-export-main.running {
+      background: var(--danger);
+      box-shadow: 0 2px 8px rgba(255, 69, 58, 0.35);
+    }
+
+    /* Right Main Stage */
     .stage {
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding: 16px 22px;
-      gap: 12px;
       overflow: hidden;
+      background: var(--bg-app);
+      padding: 14px;
+      gap: 12px;
     }
 
-    /* 1. Cinema Video Card */
+    /* Video Player Card */
     .player-card {
-      flex: 1;
-      min-height: 240px;
-      background: var(--bg-surface);
+      background: #000000;
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 8px;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      flex-shrink: 0;
     }
 
     .video-viewport {
-      flex: 1;
-      background: #050507;
+      width: 100%;
+      max-height: 48vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
-      position: relative;
+      background: #000000;
     }
 
-    video {
+    video#videoPlayer {
       width: 100%;
-      height: 100%;
+      max-height: 48vh;
       object-fit: contain;
       outline: none;
     }
 
-    /* Pure Icon Transport Bar */
+    /* Trimming & Transport Control Bar */
     .transport-bar {
       height: 44px;
-      padding: 0 14px;
-      background: var(--bg-elevated);
+      background: var(--bg-sidebar);
       border-top: 1px solid var(--border);
+      padding: 0 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-shrink: 0;
+      gap: 12px;
     }
 
     .transport-group {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
 
-    .time-pill {
+    .time-badge {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       padding: 4px 10px;
-      border-radius: 7px;
       background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
       font-size: 12px;
-      color: var(--text-secondary);
-      margin-left: 4px;
     }
 
-    .time-pill strong {
-      color: var(--text-primary);
+    .time-badge strong {
+      color: var(--accent);
     }
 
     .divider-v {
       width: 1px;
-      height: 16px;
-      background: var(--border-strong);
+      height: 20px;
+      background: var(--border);
       margin: 0 4px;
     }
 
-    /* 2. Minimalist Timeline Bar */
-    .timeline-strip {
+    .btn-keep-toggle {
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
       background: var(--bg-surface);
+      color: var(--text-secondary);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 7px 10px;
-      flex-shrink: 0;
     }
 
-    canvas#timelineCanvas {
-      width: 100%;
-      height: 32px;
-      display: block;
-      cursor: pointer;
-      border-radius: 5px;
+    .btn-keep-toggle.active {
+      background: rgba(10, 132, 255, 0.18);
+      color: var(--accent);
+      border-color: var(--accent);
     }
 
-    /* 3. Visual Rally Chip Matrix (Replaces wordy text table!) */
-    .chips-section {
-      height: 168px;
+    /* Timeline Section */
+    .timeline-section {
+      height: 60px;
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      justify-content: center;
       flex-shrink: 0;
     }
 
-    .chips-header {
+    #timelineCanvas {
+      width: 100%;
+      height: 48px;
+      display: block;
+      cursor: pointer;
+    }
+
+    /* Rally Inspection Section */
+    .rallies-section {
+      flex: 1;
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .rallies-header {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
+      background: var(--bg-surface);
     }
 
-    .filter-group {
+    .game-tabs {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
+      overflow-x: auto;
     }
 
-    .filter-pill {
+    .game-tab {
       padding: 4px 10px;
-      border-radius: 99px;
-      font-size: 11.5px;
       background: transparent;
       color: var(--text-secondary);
-      border: 1px solid transparent;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
     }
 
-    .filter-pill.active {
-      background: var(--bg-surface);
+    .game-tab:hover {
+      background: var(--bg-hover);
       color: var(--text-primary);
-      border-color: var(--border-strong);
+    }
+
+    .game-tab.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
       font-weight: 600;
     }
 
-    .chips-grid {
+    .rallies-grid {
       flex: 1;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px;
+      padding: 12px;
       overflow-y: auto;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-      grid-auto-rows: 34px;
-      gap: 6px;
-      align-content: start;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+      align-content: flex-start;
     }
 
-    .rally-chip {
-      height: 34px;
-      padding: 0 9px;
-      border-radius: 8px;
-      background: var(--bg-elevated);
+    .rally-card {
+      background: var(--bg-surface);
       border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .rally-card:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-hover);
+    }
+
+    .rally-card.selected {
+      border-color: var(--accent);
+      background: var(--bg-active);
+    }
+
+    .rally-card.excluded {
+      opacity: 0.5;
+    }
+
+    .rally-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      cursor: pointer;
-      font-size: 11.5px;
-      transition: all 0.1s ease;
     }
 
-    .rally-chip:hover {
-      border-color: var(--border-strong);
-    }
-
-    .rally-chip.selected {
-      background: var(--bg-active);
-      border-color: var(--amber);
-    }
-
-    .rally-chip.skipped {
-      opacity: 0.35;
-    }
-
-    .chip-id {
-      color: var(--text-secondary);
+    .rally-title {
+      font-size: 13px;
       font-weight: 600;
+      color: var(--text-primary);
     }
 
-    .rally-chip.selected .chip-id {
+    .rally-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+    }
+
+    .rally-badge.long {
+      background: rgba(255, 159, 10, 0.15);
       color: var(--amber);
     }
 
-    .chip-dur {
-      color: var(--text-primary);
+    .rally-time-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .rally-dur {
       font-weight: 600;
+      color: var(--accent);
     }
 
-    .chip-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--accent);
-      flex-shrink: 0;
-    }
-
-    .rally-chip.skipped .chip-dot {
-      background: var(--text-muted);
-    }
-
-    /* ==========================================================================
-       Minimalist Settings Modal
-       ========================================================================== */
+    /* Modal */
     .modal-backdrop {
       position: fixed;
       inset: 0;
       background: var(--backdrop);
-      backdrop-filter: blur(4px);
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 100;
-    }
-
-    .modal-backdrop.open {
-      display: flex;
+      z-index: 500;
+      backdrop-filter: blur(4px);
     }
 
     .modal-card {
-      width: 420px;
-      background: var(--bg-elevated);
+      width: 440px;
+      background: var(--bg-sidebar);
       border: 1px solid var(--border-strong);
-      border-radius: 14px;
-      padding: 18px 20px;
+      border-radius: 10px;
+      padding: 18px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+      gap: 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
     }
 
     .modal-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 13.5px;
+      font-size: 14px;
       font-weight: 600;
+      color: var(--text-primary);
     }
 
     .slider-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
+      gap: 12px;
       font-size: 12px;
-      color: var(--text-secondary);
     }
 
-    .slider-row span.lbl {
-      width: 110px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+    .slider-row .lbl {
+      width: 100px;
+      color: var(--text-secondary);
     }
 
     .slider-row input[type="range"] {
@@ -723,131 +785,115 @@
       accent-color: var(--accent);
     }
 
-    .slider-row span.val {
-      width: 40px;
+    .slider-row .val {
+      width: 44px;
       text-align: right;
-      color: var(--accent);
+      color: var(--text-primary);
       font-weight: 600;
     }
 
     input[type="text"] {
-      flex: 1;
+      width: 100%;
+      padding: 8px 10px;
       background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
       color: var(--text-primary);
-      border: 1px solid var(--border-strong);
-      border-radius: 7px;
-      padding: 6px 10px;
-      font-size: 11.5px;
+      font-size: 12px;
       outline: none;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
     }
   </style>
 </head>
+
 <body>
-  <!-- Reusable Unified Flat SVG Icon Definitions -->
-  <svg style="display:none;" xmlns="http://www.w3.org/2000/svg">
-    <!-- Shuttlecock / Rally -->
+  <!-- Pro SVG Outline Symbols -->
+  <svg style="display:none">
     <symbol id="ic-shuttle" viewBox="0 0 24 24">
-      <path d="M12 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
-      <path d="M9.5 14.5 5 4l5 3 2-4 2 4 5-3-4.5 10.5"/>
+      <circle cx="12" cy="18" r="3"/>
+      <path d="M12 15L6 6h12l-6 9z"/>
+      <line x1="8" y1="9" x2="16" y2="9"/>
+      <line x1="10" y1="12" x2="14" y2="12"/>
     </symbol>
-    <!-- Fast Forward / Condensed -->
-    <symbol id="ic-bolt" viewBox="0 0 24 24">
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-    </symbol>
-    <!-- Vertical 9:16 Smartphone -->
-    <symbol id="ic-phone" viewBox="0 0 24 24">
-      <rect x="6" y="2" width="12" height="20" rx="2.5"/>
-      <line x1="10" y1="18" x2="14" y2="18"/>
-    </symbol>
-    <!-- Solo Player Focus -->
-    <symbol id="ic-user" viewBox="0 0 24 24">
-      <circle cx="12" cy="8" r="4"/>
-      <path d="M5 20a7 7 0 0 1 14 0"/>
-    </symbol>
-    <!-- Serve Kill / Target Crosshair -->
-    <symbol id="ic-target" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="9"/>
-      <circle cx="12" cy="12" r="3"/>
-      <line x1="12" y1="3" x2="12" y2="6"/>
-      <line x1="12" y1="18" x2="12" y2="21"/>
-      <line x1="3" y1="12" x2="6" y2="12"/>
-      <line x1="18" y1="12" x2="21" y2="12"/>
-    </symbol>
-    <!-- Top 5 Showcase Sparkles -->
-    <symbol id="ic-star" viewBox="0 0 24 24">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-    </symbol>
-    <!-- Video File -->
     <symbol id="ic-video" viewBox="0 0 24 24">
-      <rect x="2" y="4" width="15" height="16" rx="2.5"/>
-      <polygon points="17 9 22 6 22 18 17 15 17 9"/>
+      <rect x="2" y="4" width="14" height="16" rx="2"/>
+      <polygon points="16 10 22 6 22 18 16 14 16 10"/>
     </symbol>
-    <!-- Add Plus -->
     <symbol id="ic-plus" viewBox="0 0 24 24">
       <line x1="12" y1="5" x2="12" y2="19"/>
       <line x1="5" y1="12" x2="19" y2="12"/>
     </symbol>
-    <!-- Folder -->
     <symbol id="ic-folder" viewBox="0 0 24 24">
-      <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"/>
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
     </symbol>
-    <!-- External Folder Open -->
     <symbol id="ic-folder-open" viewBox="0 0 24 24">
-      <path d="M2 19a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v14Z"/>
+      <path d="M2 19V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v1"/>
+      <path d="M22 10H6.5a2 2 0 0 0-1.9 1.4L2 19h18l2.5-7.5A2 2 0 0 0 22 10z"/>
     </symbol>
-    <!-- Refresh / Rescan -->
+    <symbol id="ic-bolt" viewBox="0 0 24 24">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </symbol>
+    <symbol id="ic-phone" viewBox="0 0 24 24">
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+      <line x1="12" y1="18" x2="12.01" y2="18"/>
+    </symbol>
+    <symbol id="ic-user" viewBox="0 0 24 24">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </symbol>
+    <symbol id="ic-target" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10"/>
+      <circle cx="12" cy="12" r="6"/>
+      <circle cx="12" cy="12" r="2"/>
+    </symbol>
+    <symbol id="ic-star" viewBox="0 0 24 24">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </symbol>
     <symbol id="ic-refresh" viewBox="0 0 24 24">
       <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
       <path d="M3 3v5h5"/>
       <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
       <path d="M16 16h5v5"/>
     </symbol>
-    <!-- Export / Download -->
     <symbol id="ic-export" viewBox="0 0 24 24">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="7 10 12 15 17 10"/>
       <line x1="12" y1="15" x2="12" y2="3"/>
     </symbol>
-    <!-- Stop Square -->
     <symbol id="ic-stop" viewBox="0 0 24 24">
       <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
     </symbol>
-    <!-- Play -->
     <symbol id="ic-play" viewBox="0 0 24 24">
       <polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/>
     </symbol>
-    <!-- Pause -->
     <symbol id="ic-pause" viewBox="0 0 24 24">
       <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>
       <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>
     </symbol>
-    <!-- Prev -->
     <symbol id="ic-prev" viewBox="0 0 24 24">
       <polygon points="19 20 9 12 19 4 19 20"/>
       <line x1="5" y1="19" x2="5" y2="5"/>
     </symbol>
-    <!-- Next -->
     <symbol id="ic-next" viewBox="0 0 24 24">
       <polygon points="5 4 15 12 5 20 5 4"/>
       <line x1="19" y1="5" x2="19" y2="19"/>
     </symbol>
-    <!-- Bracket In [| -->
     <symbol id="ic-in" viewBox="0 0 24 24">
       <path d="M9 4H5v16h4"/>
       <line x1="15" y1="12" x2="21" y2="12"/>
       <polyline points="18 9 15 12 18 15"/>
     </symbol>
-    <!-- Bracket Out |] -->
     <symbol id="ic-out" viewBox="0 0 24 24">
       <path d="M15 4h4v16h-4"/>
       <line x1="3" y1="12" x2="9" y2="12"/>
       <polyline points="6 9 9 12 6 15"/>
     </symbol>
-    <!-- Check / Keep -->
     <symbol id="ic-check" viewBox="0 0 24 24">
       <polyline points="20 6 9 17 4 12"/>
     </symbol>
-    <!-- Sliders / Settings -->
     <symbol id="ic-sliders" viewBox="0 0 24 24">
       <line x1="4" y1="21" x2="4" y2="14"/>
       <line x1="4" y1="10" x2="4" y2="3"/>
@@ -859,7 +905,6 @@
       <line x1="9" y1="8" x2="15" y2="8"/>
       <line x1="17" y1="16" x2="23" y2="16"/>
     </symbol>
-    <!-- Sun (Light Mode) -->
     <symbol id="ic-sun" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="4"/>
       <line x1="12" y1="2" x2="12" y2="4"/>
@@ -871,110 +916,121 @@
       <line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/>
       <line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/>
     </symbol>
-    <!-- Moon (Dark Mode) -->
     <symbol id="ic-moon" viewBox="0 0 24 24">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
     </symbol>
-    <!-- Clock -->
     <symbol id="ic-clock" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="9"/>
       <polyline points="12 7 12 12 15 15"/>
     </symbol>
-    <!-- Close X -->
     <symbol id="ic-x" viewBox="0 0 24 24">
       <line x1="18" y1="6" x2="6" y2="18"/>
       <line x1="6" y1="6" x2="18" y2="18"/>
     </symbol>
   </svg>
 
-  <!-- Top Edge Progress Ribbon -->
+  <!-- Top Ribbon Progress -->
   <div class="top-ribbon">
     <div class="top-ribbon-fill" id="topRibbonFill"></div>
   </div>
 
-  <!-- Minimalist Icon Topbar -->
+  <!-- Header -->
   <header class="topbar">
     <div class="brand">
       <img src="/api/icon" alt="Logo" class="brand-logo" />
-      <div class="stat-pills">
-        <span class="stat-pill mono" title="当前保留回合数">
-          <svg class="flat-icon sm"><use href="#ic-shuttle"/></svg>
-          <strong id="topCountVal">0</strong>
-        </span>
-        <span class="stat-pill mono" title="保留精华总时长">
-          <svg class="flat-icon sm"><use href="#ic-clock"/></svg>
-          <strong id="topDurVal">00:00</strong>
-        </span>
-        <span class="stat-pill mono" id="topJobPill" style="display:none; border-color:rgba(16,163,127,0.4); color:var(--accent);">
-          <svg class="flat-icon sm spin-icon" id="topJobIcon"><use href="#ic-refresh"/></svg>
-          <strong id="topJobText" style="color:var(--accent);">0%</strong>
-        </span>
+      <span class="brand-title">
+        羽毛球比赛剪辑工作室
+        <span class="brand-tag mono">Studio Pro</span>
+      </span>
+    </div>
+
+    <!-- Center Stat Badges -->
+    <div class="stat-pills">
+      <div class="stat-pill">
+        <svg class="flat-icon sm"><use href="#ic-shuttle"/></svg>
+        <span>已保留: <strong id="topCountVal" class="mono">0</strong> 处多拍</span>
+      </div>
+      <div class="stat-pill">
+        <svg class="flat-icon sm"><use href="#ic-clock"/></svg>
+        <span>精华总长: <strong id="topDurVal" class="mono">00:00</strong></span>
+      </div>
+      <div class="stat-pill" id="topJobPill" style="display:none; color:var(--accent); border-color:rgba(10,132,255,0.4);">
+        <svg class="flat-icon sm spin-icon"><use href="#ic-refresh"/></svg>
+        <span id="topJobText" class="mono">正在剪辑 0%</span>
       </div>
     </div>
 
+    <!-- Right Controls -->
     <div class="topbar-actions">
-      <button class="icon-btn" onclick="toggleSettings(true)" title="参数设置">
-        <svg class="flat-icon"><use href="#ic-sliders"/></svg>
+      <button class="btn-pro" onclick="openOutputFolder()" title="打开视频输出目录">
+        <svg class="flat-icon sm"><use href="#ic-folder-open"/></svg>
+        <span>输出目录</span>
       </button>
-      <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="切换深浅色主题">
+      <button class="btn-pro" onclick="toggleSettings(true)" title="剪辑算法参数设置">
+        <svg class="flat-icon sm"><use href="#ic-sliders"/></svg>
+        <span>设置</span>
+      </button>
+      <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="切换深色/浅色外观">
         <svg class="flat-icon" id="themeIconUse"><use href="#ic-sun"/></svg>
       </button>
     </div>
   </header>
 
-  <!-- Main Workspace -->
+  <!-- Workspace -->
   <div class="layout">
-    <!-- Left Icon Sidebar -->
+    <!-- Left Sidebar: 300px -->
     <aside class="sidebar">
-      <!-- 1. Videos -->
-      <div>
-        <div class="sec-bar">
-          <svg class="flat-icon sm"><use href="#ic-video"/></svg>
+      <!-- Section 1: Video Files -->
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>比赛视频源</span>
           <div style="display:flex; gap:4px;">
-            <button class="icon-btn sm" onclick="browseNative('files')" title="添加视频文件">
-              <svg class="flat-icon sm"><use href="#ic-plus"/></svg>
+            <button class="btn-pro" style="padding:2px 7px; font-size:11px;" onclick="browseNative('files')">
+              <svg class="flat-icon sm"><use href="#ic-plus"/></svg> 添加文件
             </button>
-            <button class="icon-btn sm" onclick="browseNative('folder')" title="导入视频文件夹">
-              <svg class="flat-icon sm"><use href="#ic-folder"/></svg>
+            <button class="btn-pro" style="padding:2px 7px; font-size:11px;" onclick="browseNative('folder')">
+              <svg class="flat-icon sm"><use href="#ic-folder"/></svg> 导入目录
             </button>
           </div>
         </div>
-        <div class="video-list" id="videoList"></div>
+        <div id="videoList" style="display:flex; flex-direction:column; gap:6px;"></div>
       </div>
 
-      <!-- 2. 3x2 Flat Icon Mode Grid -->
-      <div>
-        <div class="sec-bar">
-          <svg class="flat-icon sm"><use href="#ic-shuttle"/></svg>
-          <button class="icon-btn sm" onclick="resetDefaultMode()" title="重置为默认模式">
-            <svg class="flat-icon sm"><use href="#ic-check"/></svg>
+      <!-- Section 2: Export Modes -->
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>集锦生成模式</span>
+          <button class="btn-pro" style="padding:2px 7px; font-size:11px;" onclick="resetDefaultMode()" title="恢复默认模式">
+            <svg class="flat-icon sm"><use href="#ic-check"/></svg> 默认
           </button>
         </div>
-        <div class="mode-grid" id="modeGrid"></div>
+        <div class="mode-list" id="modeList"></div>
       </div>
 
-      <!-- 3. Bottom Action Dock -->
+      <!-- Section 3: Bottom Dock -->
       <div class="sidebar-dock">
-        <div class="progress-card" id="progressCard">
-          <div class="progress-head">
-            <span class="progress-step mono" id="progressStepText">0/0</span>
-            <span class="progress-pct mono" id="progressPctText">0%</span>
+        <!-- Progress Box -->
+        <div class="progress-box" id="progressBox" style="display:none;">
+          <div class="progress-labels">
+            <span id="progressStepText">准备中...</span>
+            <span id="progressPctText" class="mono">0%</span>
           </div>
-          <div class="progress-track">
-            <div class="progress-bar" id="progressFill"></div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill"></div>
           </div>
         </div>
 
-        <div class="dock-row">
-          <button class="btn-export-main" id="mainExportBtn" onclick="startJob('one_click')" title="一键导出视频集锦">
-            <svg class="flat-icon" id="exportBtnIcon"><use href="#ic-export"/></svg>
-            <span id="exportBtnLabel" class="mono">导出</span>
+        <!-- Main Action Buttons -->
+        <button class="btn-export-main" id="mainExportBtn" onclick="startJob('one_click')">
+          <svg class="flat-icon lg" id="exportBtnIcon"><use href="#ic-export"/></svg>
+          <span id="exportBtnLabel">⚡ 导出比赛集锦</span>
+        </button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-pro" style="flex:1;" onclick="startJob('scan')">
+            <svg class="flat-icon sm"><use href="#ic-refresh"/></svg> 重新扫描
           </button>
-          <button class="icon-btn" onclick="startJob('scan')" title="重新扫描识别当前视频">
-            <svg class="flat-icon"><use href="#ic-refresh"/></svg>
-          </button>
-          <button class="icon-btn" onclick="openOutputFolder()" title="打开输出文件夹">
-            <svg class="flat-icon"><use href="#ic-folder-open"/></svg>
+          <button class="btn-pro" style="flex:1;" onclick="openOutputFolder()">
+            <svg class="flat-icon sm"><use href="#ic-folder-open"/></svg> 打开目录
           </button>
         </div>
       </div>
@@ -982,131 +1038,142 @@
 
     <!-- Right Main Stage -->
     <main class="stage">
-      <!-- 1. Large Cinema Video Player + Pure Icon Transport Bar -->
+      <!-- 1. Cinema Video Player -->
       <section class="player-card">
         <div class="video-viewport">
           <video id="videoPlayer" controls playsinline></video>
         </div>
 
+        <!-- 2. Transport & Trimming Bar -->
         <div class="transport-bar">
-          <!-- Left: Prev / Play / Next + Timecode Pill -->
+          <!-- Left: Navigation -->
           <div class="transport-group">
-            <button class="icon-btn sm" onclick="stepSegment(-1)" title="上一回合 (↑)">
-              <svg class="flat-icon sm"><use href="#ic-prev"/></svg>
+            <button class="btn-pro" onclick="stepSegment(-1)" title="上一回合 (快捷键: ↑)">
+              <svg class="flat-icon sm"><use href="#ic-prev"/></svg> 上一拍
             </button>
-            <button class="icon-btn accent" id="playSegBtn" onclick="playSelectedSegment()" title="播放 / 暂停本回合 (空格)">
-              <svg class="flat-icon sm" id="playIconSvg"><use href="#ic-play"/></svg>
+            <button class="btn-pro primary" id="playSegBtn" onclick="playSelectedSegment()" title="播放/暂停本回合 (快捷键: 空格)">
+              <svg class="flat-icon sm" id="playIconSvg"><use href="#ic-play"/></svg> 播放本回合
             </button>
-            <button class="icon-btn sm" onclick="stepSegment(1)" title="下一回合 (↓)">
-              <svg class="flat-icon sm"><use href="#ic-next"/></svg>
+            <button class="btn-pro" onclick="stepSegment(1)" title="下一回合 (快捷键: ↓)">
+              下一拍 <svg class="flat-icon sm"><use href="#ic-next"/></svg>
             </button>
 
-            <div class="time-pill mono">
-              <strong id="curRallyId">#01</strong>
-              <span id="curRallyRange">00:00.0 – 00:00.0</span>
-              <strong id="curRallyDur" style="color:var(--accent);">0.0s</strong>
+            <div class="time-badge mono">
+              <span id="curRallyId">#01</span>
+              <span id="curRallyRange" style="color:var(--text-secondary);">00:00.0 – 00:00.0</span>
+              <strong id="curRallyDur">0.0s</strong>
             </div>
           </div>
 
-          <!-- Right: Pure Icon Trim & Keep Controls -->
+          <!-- Right: Precision Trimming & Keep -->
           <div class="transport-group">
-            <!-- Start Trim -->
-            <button class="icon-btn sm" onclick="setEdgeToPlayhead('start')" title="将当前播放帧设为回合起点">
-              <svg class="flat-icon sm"><use href="#ic-in"/></svg>
+            <!-- Start Point Trimming -->
+            <button class="btn-pro mono" onclick="nudgeEdge('start', -0.5)" title="起点提前 0.5 秒">◀ -0.5s</button>
+            <button class="btn-pro" onclick="setEdgeToPlayhead('start')" title="将当前播放针设为回合起点 (快捷键: I)">
+              <svg class="flat-icon sm"><use href="#ic-in"/></svg> 起点微调
             </button>
-            <button class="icon-btn sm mono" onclick="nudgeEdge('start', -0.5)" title="起点提前 0.5 秒">-0.5</button>
-            <button class="icon-btn sm mono" onclick="nudgeEdge('start', 0.5)" title="起点推迟 0.5 秒">+0.5</button>
+            <button class="btn-pro mono" onclick="nudgeEdge('start', 0.5)" title="起点推迟 0.5 秒">+0.5s ▶</button>
 
             <div class="divider-v"></div>
 
-            <!-- End Trim -->
-            <button class="icon-btn sm mono" onclick="nudgeEdge('end', -0.5)" title="终点提前 0.5 秒">-0.5</button>
-            <button class="icon-btn sm mono" onclick="nudgeEdge('end', 0.5)" title="终点延长 0.5 秒">+0.5</button>
-            <button class="icon-btn sm" onclick="setEdgeToPlayhead('end')" title="将当前播放帧设为回合终点">
-              <svg class="flat-icon sm"><use href="#ic-out"/></svg>
+            <!-- End Point Trimming -->
+            <button class="btn-pro mono" onclick="nudgeEdge('end', -0.5)" title="终点提前 0.5 秒">◀ -0.5s</button>
+            <button class="btn-pro" onclick="setEdgeToPlayhead('end')" title="将当前播放针设为回合终点 (快捷键: O)">
+              <svg class="flat-icon sm"><use href="#ic-out"/></svg> 终点微调
             </button>
+            <button class="btn-pro mono" onclick="nudgeEdge('end', 0.5)" title="终点延长 0.5 秒">+0.5s ▶</button>
 
             <div class="divider-v"></div>
 
-            <!-- Keep / Skip Toggle -->
-            <button class="icon-btn sm active-keep" id="keepToggleBtn" onclick="toggleSelectedSegment()" title="保留 / 跳过本回合 (Delete)">
-              <svg class="flat-icon sm"><use href="#ic-check"/></svg>
+            <!-- Keep Toggle Button -->
+            <button class="btn-keep-toggle active" id="keepToggleBtn" onclick="toggleSelectedSegment()" title="保留/跳过本回合 (快捷键: Delete)">
+              <svg class="flat-icon sm" id="keepIcon"><use href="#ic-check"/></svg>
+              <span id="keepLabel">✓ 保留本回合</span>
             </button>
           </div>
         </div>
       </section>
 
-      <!-- 2. Minimalist Visual Timeline -->
-      <section class="timeline-strip">
+      <!-- 3. Multitrack NLE Timeline -->
+      <section class="timeline-section">
         <canvas id="timelineCanvas"></canvas>
       </section>
 
-      <!-- 3. Visual Rally Chip Grid (No wordy table!) -->
-      <section class="chips-section">
-        <div class="chips-header">
-          <div class="filter-group" id="gameFilterBar"></div>
-          <div class="filter-group">
-            <button class="icon-btn sm" onclick="batchAction('enable_all')" title="全部保留">
-              <svg class="flat-icon sm"><use href="#ic-check"/></svg>
+      <!-- 4. Rally Inspection Grid -->
+      <section class="rallies-section">
+        <div class="rallies-header">
+          <!-- Game Tabs -->
+          <div class="game-tabs" id="gameFilterBar"></div>
+
+          <!-- Batch Action Buttons -->
+          <div style="display:flex; gap:6px;">
+            <button class="btn-pro" style="padding:4px 9px; font-size:11px;" onclick="batchAction('enable_all')">
+              <svg class="flat-icon sm"><use href="#ic-check"/></svg> 全部保留
             </button>
-            <button class="icon-btn sm" onclick="batchAction('keep_15s')" title="仅保留 15 秒以上超长多拍">
-              <svg class="flat-icon sm"><use href="#ic-star"/></svg>
+            <button class="btn-pro" style="padding:4px 9px; font-size:11px;" onclick="batchAction('keep_15s')">
+              <svg class="flat-icon sm"><use href="#ic-star"/></svg> 只留超长多拍(≥15秒)
             </button>
           </div>
         </div>
 
-        <div class="chips-grid" id="chipsGrid"></div>
+        <!-- Cards Grid -->
+        <div class="rallies-grid" id="ralliesGrid"></div>
       </section>
     </main>
   </div>
 
-  <!-- Minimalist Settings Modal (Hidden by Default) -->
+  <!-- Settings Modal -->
   <div class="modal-backdrop" id="settingsModal" onclick="if(event.target===this) toggleSettings(false)">
     <div class="modal-card">
       <div class="modal-head">
-        <span style="display:inline-flex; align-items:center; gap:7px;">
+        <span style="display:inline-flex; align-items:center; gap:8px;">
           <svg class="flat-icon"><use href="#ic-sliders"/></svg>
-          <span>参数设置</span>
+          <span>剪辑算法参数设置</span>
         </span>
         <button class="icon-btn sm" onclick="toggleSettings(false)">
           <svg class="flat-icon sm"><use href="#ic-x"/></svg>
         </button>
       </div>
 
-      <div style="display:flex; gap:6px; align-items:center;">
-        <button class="icon-btn sm" onclick="browseNative('output')" title="选择输出目录">
-          <svg class="flat-icon sm"><use href="#ic-folder-open"/></svg>
-        </button>
-        <input type="text" id="outDirInput" class="mono" onchange="savePrefsFromUI()" />
+      <!-- Output Directory -->
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <label style="font-size:11px; color:var(--text-secondary);">默认导出目录</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="outDirInput" class="mono" onchange="savePrefsFromUI()" />
+          <button class="btn-pro" onclick="browseNative('output')">
+            <svg class="flat-icon sm"><use href="#ic-folder-open"/></svg> 浏览
+          </button>
+        </div>
       </div>
 
-      <div style="display:flex; flex-direction:column; gap:10px; padding-top:4px;">
+      <!-- Sliders -->
+      <div style="display:flex; flex-direction:column; gap:12px; padding:4px 0;">
         <div class="slider-row">
-          <span class="lbl"><svg class="flat-icon sm"><use href="#ic-shuttle"/></svg> 最少拍数</span>
+          <span class="lbl"><svg class="flat-icon sm"><use href="#ic-shuttle"/></svg> 最少击球拍数</span>
           <input type="range" id="slMinHits" min="3" max="15" step="1" oninput="onSliderInput()" />
-          <span class="val mono" id="valMinHits">5</span>
+          <span class="val mono" id="valMinHits">5 拍</span>
         </div>
         <div class="slider-row">
-          <span class="lbl"><svg class="flat-icon sm"><use href="#ic-clock"/></svg> 最短时长</span>
+          <span class="lbl"><svg class="flat-icon sm"><use href="#ic-clock"/></svg> 最短有效时长</span>
           <input type="range" id="slMinDur" min="3.0" max="18.0" step="0.5" oninput="onSliderInput()" />
           <span class="val mono" id="valMinDur">5.0s</span>
         </div>
         <div class="slider-row">
-          <span class="lbl"><svg class="flat-icon sm"><use href="#ic-pause"/></svg> 局间间隔</span>
+          <span class="lbl"><svg class="flat-icon sm"><use href="#ic-pause"/></svg> 局间换场阈值</span>
           <input type="range" id="slRestGap" min="12.0" max="60.0" step="1.0" oninput="onSliderInput()" />
           <span class="val mono" id="valRestGap">22s</span>
         </div>
         <div class="slider-row">
-          <span class="lbl"><svg class="flat-icon sm"><use href="#ic-star"/></svg> 单局最少</span>
+          <span class="lbl"><svg class="flat-icon sm"><use href="#ic-star"/></svg> 单局最少回合</span>
           <input type="range" id="slMinGameRallies" min="3" max="20" step="1" oninput="onSliderInput()" />
-          <span class="val mono" id="valMinGameRallies">8</span>
+          <span class="val mono" id="valMinGameRallies">8 拍</span>
         </div>
       </div>
 
-      <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid var(--border); font-size:11px; color:var(--text-secondary);">
-        <span class="mono" id="hwInfoText">h264_videotoolbox</span>
-        <button class="icon-btn sm" onclick="resetSliders()" title="恢复默认灵敏度">
-          <svg class="flat-icon sm"><use href="#ic-refresh"/></svg>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding-top:10px; border-top:1px solid var(--border); font-size:11px; color:var(--text-secondary);">
+        <span class="mono" id="hwInfoText">本地硬件加速就绪</span>
+        <button class="btn-pro" style="padding:4px 8px; font-size:11px;" onclick="resetSliders()">
+          <svg class="flat-icon sm"><use href="#ic-refresh"/></svg> 恢复默认
         </button>
       </div>
     </div>
@@ -1114,12 +1181,12 @@
 
   <script>
     const MODES_META = [
-      { key: "all",       icon: "ic-shuttle", name: "多拍", tip: "默认模式：按局切分全部多拍回合" },
-      { key: "condensed", icon: "ic-bolt",    name: "纯享", tip: "剔除死球等待，整场紧凑连播" },
-      { key: "vertical",  icon: "ic-phone",   name: "竖屏", tip: "9:16 竖屏短视频裁剪导出" },
-      { key: "solo",      icon: "ic-user",    name: "独享", tip: "主角球员出场时段独享集锦" },
-      { key: "review",    icon: "ic-target",  name: "复盘", tip: "发球接发一拍定音战术复盘" },
-      { key: "showcase",  icon: "ic-star",    name: "高光", tip: "Top 5 超长多拍 + 慢镜重放" },
+      { key: "all",       icon: "ic-shuttle", name: "按局分段", desc: "默认标准：自动按比赛对局切分全部多拍回合" },
+      { key: "condensed", icon: "ic-bolt",    name: "连贯纯享", desc: "剔除死球走动等待，整场紧凑纯享连播" },
+      { key: "vertical",  icon: "ic-phone",   name: "9:16竖屏", desc: "手机竖屏短视频智能裁剪居中导出" },
+      { key: "solo",      icon: "ic-user",    name: "主角独享", desc: "指定主角球员出场时段独立集锦" },
+      { key: "review",    icon: "ic-target",  name: "战术复盘", desc: "发球接发一拍定音秒杀战术复盘" },
+      { key: "showcase",  icon: "ic-star",    name: "五佳高光", desc: "Top 5 极限拉锯多拍与慢镜重放" },
     ];
 
     let appState = null;
@@ -1128,7 +1195,6 @@
     let activeGameFilter = "all";
     let loadedVideoPath = null;
     let isLoopingSegment = false;
-    let dragMode = null;
 
     const videoEl = document.getElementById("videoPlayer");
     const canvas = document.getElementById("timelineCanvas");
@@ -1148,484 +1214,333 @@
       return await r.json();
     }
 
-    function fmtSec(sec) {
-      sec = Math.max(0, Number(sec) || 0);
-      const m = Math.floor(sec / 60);
-      const s = sec - m * 60;
-      return `${String(m).padStart(2, "0")}:${s.toFixed(1).padStart(4, "0")}`;
+    function formatTime(s) {
+      if (isNaN(s) || s < 0) s = 0;
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${String(m).padStart(2, "0")}:${sec.toFixed(1).padStart(4, "0")}`;
     }
 
-    function shortFileName(name) {
-      return name.replace(/\.(mp4|mov|mkv|ts)$/i, "").replace(/^VID_(\d{8})_(\d{4})\d*/, "$1_$2");
+    function formatTimeBrief(s) {
+      if (isNaN(s) || s < 0) s = 0;
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
     }
 
-    function renderAll(state, preserveSelection = true) {
+    function renderAll(state, preserveVideo = true) {
       appState = state;
+      if (!state) return;
 
-      // Theme & Flat Sun/Moon Icon
-      const theme = state.theme_mode === "light" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", theme);
-      document.getElementById("themeIconUse").innerHTML =
-        `<use href="#${theme === 'dark' ? 'ic-sun' : 'ic-moon'}"/>`;
-      document.getElementById("hwInfoText").textContent = `${state.hw_encoder} · v${state.version}`;
-
-      // Videos list
-      const vList = document.getElementById("videoList");
-      vList.innerHTML = "";
-      (state.videos || []).forEach((v) => {
-        const div = document.createElement("div");
-        div.className = "video-item" + (v.path === state.current_vpath ? " active" : "");
-        div.title = v.path;
-        div.onclick = () => selectVideo(v.path);
-        div.innerHTML = `
-          <div class="video-item-left">
-            <svg class="flat-icon sm"><use href="#ic-video"/></svg>
-            <span class="video-title mono">${shortFileName(v.name)}</span>
-          </div>
-          <span class="video-cnt mono">${v.cached ? v.rally_count : "—"}</span>
-        `;
-        vList.appendChild(div);
-      });
-
-      // 3x2 Flat Icon Mode Tiles
-      const mGrid = document.getElementById("modeGrid");
-      mGrid.innerHTML = "";
-      MODES_META.forEach((m) => {
-        const selected = selectedModes.includes(m.key);
-        const btn = document.createElement("button");
-        btn.className = "mode-tile" + (selected ? " selected" : "");
-        btn.title = m.tip;
-        btn.onclick = () => toggleModePill(m.key);
-        btn.innerHTML = `
-          <svg class="flat-icon lg"><use href="#${m.icon}"/></svg>
-          <span>${m.name}</span>
-        `;
-        mGrid.appendChild(btn);
-      });
-
-      if (document.activeElement !== document.getElementById("outDirInput")) {
-        document.getElementById("outDirInput").value = state.output_dir || "";
-      }
-
-      // Progress & Export Button (Top Ribbon + Top Pill + Sidebar Progress Card)
-      const job = state.job || {};
-      const pCard = document.getElementById("progressCard");
-      const topRibbon = document.getElementById("topRibbonFill");
-      const topJobPill = document.getElementById("topJobPill");
-      const topJobIcon = document.getElementById("topJobIcon");
-      const topJobText = document.getElementById("topJobText");
-      const mainBtn = document.getElementById("mainExportBtn");
-
-      if (job.is_running) {
-        const pct = Math.max(1, Math.round(job.progress || 0));
-        const cleanStatus = (job.status || "处理中").replace(/^🎉\s*/, "");
-        pCard.classList.add("visible");
-        document.getElementById("progressFill").style.width = `${pct}%`;
-        document.getElementById("progressStepText").textContent = cleanStatus;
-        document.getElementById("progressPctText").textContent = `${pct}%`;
-
-        topRibbon.classList.add("active");
-        topRibbon.style.width = `${pct}%`;
-
-        topJobPill.style.display = "inline-flex";
-        topJobIcon.classList.add("spin-icon");
-        topJobIcon.innerHTML = `<use href="#ic-refresh"/>`;
-        topJobText.textContent = `${cleanStatus} · ${pct}%`;
-
-        document.getElementById("exportBtnIcon").innerHTML = `<use href="#ic-stop"/>`;
-        document.getElementById("exportBtnLabel").textContent = `${pct}%`;
-        mainBtn.onclick = () => apiPost("/api/stop_job").then(s => renderAll(s, true));
-      } else {
-        pCard.classList.remove("visible");
-        topRibbon.classList.remove("active");
-        topRibbon.style.width = "0%";
-
-        if (job.progress >= 100) {
-          topJobPill.style.display = "inline-flex";
-          topJobIcon.classList.remove("spin-icon");
-          topJobIcon.innerHTML = `<use href="#ic-check"/>`;
-          topJobText.textContent = "100%";
-        } else {
-          topJobPill.style.display = "none";
-        }
-
-        document.getElementById("exportBtnIcon").innerHTML = `<use href="#ic-export"/>`;
-        document.getElementById("exportBtnLabel").textContent = "导出";
-        mainBtn.onclick = () => startJob("one_click");
-      }
-
-      // Timeline & Segments
+      // 1. Stats
       const tl = state.timeline;
+      let keptCount = 0;
+      let keptDur = 0;
+      if (tl && tl.segments) {
+        for (const s of tl.segments) {
+          if (s.enabled) {
+            keptCount++;
+            keptDur += (s.e_cut - s.s_cut);
+          }
+        }
+      }
+      document.getElementById("topCountVal").textContent = keptCount;
+      document.getElementById("topDurVal").textContent = formatTimeBrief(keptDur);
+
+      // 2. Video Player
+      if (state.current_video && (!preserveVideo || loadedVideoPath !== state.current_video)) {
+        loadedVideoPath = state.current_video;
+        videoEl.src = `/api/video_stream?path=${encodeURIComponent(state.current_video)}`;
+        videoEl.load();
+      }
+
+      // 3. Render Videos
+      renderVideoList(state.videos || [], state.current_video);
+
+      // 4. Render Mode Cards
+      renderModes();
+
+      // 5. Render Current Segment in Transport
+      renderTransportInfo();
+
+      // 6. Draw Timeline
+      drawTimeline();
+
+      // 7. Render Game Tabs & Rally Grid
+      renderGameTabs();
+      renderRallies();
+
+      // 8. Progress Box & Export Button State
+      renderJobState(state.job);
+
+      // 9. HW Info
+      if (state.hw_encoder) {
+        document.getElementById("hwInfoText").textContent = `硬件加速: ${state.hw_encoder}`;
+      }
+    }
+
+    function renderVideoList(videos, curVideo) {
+      const container = document.getElementById("videoList");
+      container.innerHTML = "";
+      if (!videos || videos.length === 0) {
+        container.innerHTML = `<div style="padding:14px; text-align:center; color:var(--text-muted); font-size:11px;">未添加比赛视频<br>点击上方按钮导入</div>`;
+        return;
+      }
+      videos.forEach(v => {
+        const isCur = v === curVideo;
+        const name = v.split("/").pop().split("\\").pop();
+        const card = document.createElement("div");
+        card.className = `video-card ${isCur ? "active" : ""}`;
+        card.onclick = () => selectVideo(v);
+        card.innerHTML = `
+          <div class="video-name" title="${name}">${name}</div>
+          <div class="video-meta">
+            <span class="video-tag">已解析</span>
+            <span class="mono">当前对战</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderModes() {
+      const container = document.getElementById("modeList");
+      container.innerHTML = "";
+      MODES_META.forEach(m => {
+        const isActive = selectedModes.includes(m.key);
+        const item = document.createElement("div");
+        item.className = `mode-item ${isActive ? "active" : ""}`;
+        item.onclick = () => toggleMode(m.key);
+        item.innerHTML = `
+          <div class="mode-icon-box">
+            <svg class="flat-icon"><use href="#${m.icon}"/></svg>
+          </div>
+          <div class="mode-text">
+            <span class="mode-name">${m.name}</span>
+            <span class="mode-desc">${m.desc}</span>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function toggleMode(key) {
+      if (key === "all") {
+        selectedModes = ["all"];
+      } else {
+        selectedModes = selectedModes.filter(k => k !== "all");
+        if (selectedModes.includes(key)) {
+          selectedModes = selectedModes.filter(k => k !== key);
+        } else {
+          selectedModes.push(key);
+        }
+        if (selectedModes.length === 0) selectedModes = ["all"];
+      }
+      renderModes();
+    }
+
+    function resetDefaultMode() {
+      selectedModes = ["all"];
+      renderModes();
+    }
+
+    function renderTransportInfo() {
+      const tl = appState?.timeline;
       if (!tl || !tl.segments || tl.segments.length === 0) {
-        document.getElementById("topCountVal").textContent = "0";
-        document.getElementById("topDurVal").textContent = "00:00";
-        document.getElementById("chipsGrid").innerHTML = "";
-        drawTimeline();
+        document.getElementById("curRallyId").textContent = "#--";
+        document.getElementById("curRallyRange").textContent = "00:00.0 – 00:00.0";
+        document.getElementById("curRallyDur").textContent = "0.0s";
+        return;
+      }
+      if (selectedSegIdx >= tl.segments.length) selectedSegIdx = 0;
+      const seg = tl.segments[selectedSegIdx];
+      const dur = seg.e_cut - seg.s_cut;
+
+      document.getElementById("curRallyId").textContent = `#${String(selectedSegIdx + 1).padStart(2, "0")}`;
+      document.getElementById("curRallyRange").textContent = `${formatTime(seg.s_cut)} – ${formatTime(seg.e_cut)}`;
+      document.getElementById("curRallyDur").textContent = `${dur.toFixed(1)}s`;
+
+      const keepBtn = document.getElementById("keepToggleBtn");
+      const keepLabel = document.getElementById("keepLabel");
+      if (seg.enabled) {
+        keepBtn.className = "btn-keep-toggle active";
+        keepLabel.textContent = "✓ 保留本回合";
+      } else {
+        keepBtn.className = "btn-keep-toggle";
+        keepLabel.textContent = "⊘ 已跳过本回合";
+      }
+    }
+
+    function drawTimeline() {
+      const tl = appState?.timeline;
+      const w = canvas.parentElement.clientWidth;
+      const h = canvas.parentElement.clientHeight;
+      canvas.width = w * window.devicePixelRatio;
+      canvas.height = h * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      ctx.clearRect(0, 0, w, h);
+
+      if (!tl || !tl.segments || tl.segments.length === 0) {
+        ctx.fillStyle = "rgba(128,128,128,0.2)";
+        ctx.fillRect(0, 0, w, h);
         return;
       }
 
-      if (!preserveSelection || selectedSegIdx >= tl.segments.length) {
-        selectedSegIdx = 0;
+      const totalDur = tl.duration || 1800;
+
+      // Draw background track
+      ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+      ctx.fillRect(0, 0, w, h);
+
+      // Draw segments
+      tl.segments.forEach((seg, idx) => {
+        const x1 = (seg.s_cut / totalDur) * w;
+        const x2 = (seg.e_cut / totalDur) * w;
+        const segW = Math.max(2, x2 - x1);
+
+        const isCur = idx === selectedSegIdx;
+        if (isCur) {
+          ctx.fillStyle = "#ffffff";
+        } else if (seg.enabled) {
+          ctx.fillStyle = "#0a84ff";
+        } else {
+          ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+        }
+        ctx.fillRect(x1, 8, segW, h - 16);
+      });
+
+      // Draw playhead
+      if (videoEl && videoEl.duration) {
+        const playX = (videoEl.currentTime / totalDur) * w;
+        ctx.fillStyle = "#ff453a";
+        ctx.fillRect(playX - 1, 0, 2, h);
       }
-
-      const enabledSegs = tl.segments.filter(s => s.enabled);
-      const totalKeptDur = enabledSegs.reduce((a, b) => a + (b.e_cut - b.s_cut), 0);
-      document.getElementById("topCountVal").textContent = `${enabledSegs.length}/${tl.segments.length}`;
-      document.getElementById("topDurVal").textContent = fmtSec(totalKeptDur);
-
-      if (loadedVideoPath !== tl.video_path) {
-        loadedVideoPath = tl.video_path;
-        videoEl.src = `/api/video?path=${encodeURIComponent(tl.video_path)}`;
-        const seg0 = tl.segments[selectedSegIdx];
-        if (seg0) videoEl.currentTime = seg0.s_cut;
-      }
-
-      renderGameFilters(tl);
-      renderChipsGrid(tl);
-      updateSelectedSegmentUI();
-      drawTimeline();
     }
 
-    function renderGameFilters(tl) {
-      const bar = document.getElementById("gameFilterBar");
-      const segs = tl.segments || [];
-      const games = {};
-      segs.forEach(s => {
-        const g = s.game_idx || 1;
-        games[g] = (games[g] || 0) + 1;
-      });
-      const longCount = segs.filter(s => (s.e_cut - s.s_cut) >= 15.0).length;
+    function renderGameTabs() {
+      const tl = appState?.timeline;
+      const container = document.getElementById("gameFilterBar");
+      container.innerHTML = "";
+      if (!tl || !tl.segments) return;
 
-      const items = [{ id: "all", icon: "ic-shuttle", label: `${segs.length}` }];
-      Object.keys(games).sort((a, b) => Number(a) - Number(b)).forEach(g => {
-        items.push({ id: `g${g}`, icon: "ic-video", label: `G${g} · ${games[g]}` });
-      });
-      items.push({ id: "long15", icon: "ic-star", label: `15s+ · ${longCount}` });
+      const games = new Set();
+      tl.segments.forEach(s => games.add(s.game_index || 1));
+      const sortedGames = Array.from(games).sort((a,b) => a-b);
 
-      bar.innerHTML = "";
-      items.forEach(it => {
-        const b = document.createElement("button");
-        b.className = "filter-pill mono" + (activeGameFilter === it.id ? " active" : "");
-        b.innerHTML = `<svg class="flat-icon sm"><use href="#${it.icon}"/></svg><span>${it.label}</span>`;
-        b.onclick = () => {
-          activeGameFilter = it.id;
-          renderGameFilters(tl);
-          renderChipsGrid(tl);
-          drawTimeline();
-        };
-        bar.appendChild(b);
+      const allTab = document.createElement("button");
+      allTab.className = `game-tab ${activeGameFilter === "all" ? "active" : ""}`;
+      allTab.textContent = `全部 (${tl.segments.length})`;
+      allTab.onclick = () => { activeGameFilter = "all"; renderGameTabs(); renderRallies(); };
+      container.appendChild(allTab);
+
+      sortedGames.forEach(g => {
+        const count = tl.segments.filter(s => (s.game_index || 1) === g).length;
+        const tab = document.createElement("button");
+        tab.className = `game-tab ${activeGameFilter === String(g) ? "active" : ""}`;
+        tab.textContent = `第0${g}局 (${count}拍)`;
+        tab.onclick = () => { activeGameFilter = String(g); renderGameTabs(); renderRallies(); };
+        container.appendChild(tab);
       });
     }
 
-    function passesFilter(seg) {
-      if (activeGameFilter === "all") return true;
-      if (activeGameFilter === "long15") return (seg.e_cut - seg.s_cut) >= 15.0;
-      if (activeGameFilter.startsWith("g")) {
-        return (seg.game_idx || 1) === Number(activeGameFilter.slice(1));
-      }
-      return true;
-    }
+    function renderRallies() {
+      const tl = appState?.timeline;
+      const container = document.getElementById("ralliesGrid");
+      container.innerHTML = "";
+      if (!tl || !tl.segments) return;
 
-    function renderChipsGrid(tl) {
-      const grid = document.getElementById("chipsGrid");
-      grid.innerHTML = "";
-      (tl.segments || []).forEach((s, idx) => {
-        if (!passesFilter(s)) return;
-        const chip = document.createElement("div");
-        chip.className = "rally-chip mono" +
-          (idx === selectedSegIdx ? " selected" : "") +
-          (!s.enabled ? " skipped" : "");
-        const dur = Math.round(s.e_cut - s.s_cut);
-        chip.title = `G${s.game_idx || 1} #${String(s.uid).padStart(2, "0")} | ${fmtSec(s.s_cut)} – ${fmtSec(s.e_cut)}（双击切换保留/跳过）`;
-        chip.onclick = () => selectSegment(idx, true);
-        chip.ondblclick = (e) => {
-          e.stopPropagation();
-          toggleSegmentAtIndex(idx);
-        };
-        chip.innerHTML = `
-          <span class="chip-id">#${String(s.uid).padStart(2, "0")}</span>
-          <span class="chip-dur">${dur}s</span>
-          <span class="chip-dot" onclick="event.stopPropagation(); toggleSegmentAtIndex(${idx})" title="点击切换保留/跳过"></span>
+      tl.segments.forEach((seg, idx) => {
+        const gIdx = String(seg.game_index || 1);
+        if (activeGameFilter !== "all" && activeGameFilter !== gIdx) return;
+
+        const dur = seg.e_cut - seg.s_cut;
+        const isSelected = idx === selectedSegIdx;
+        const isLong = dur >= 15.0;
+
+        const card = document.createElement("div");
+        card.className = `rally-card ${isSelected ? "selected" : ""} ${!seg.enabled ? "excluded" : ""}`;
+        card.onclick = () => selectSegment(idx);
+
+        card.innerHTML = `
+          <div class="rally-head">
+            <span class="rally-title">多拍 #${String(idx + 1).padStart(2, "0")}</span>
+            <span class="rally-badge ${isLong ? "long" : ""}">${isLong ? "超长拉锯" : "激烈对战"}</span>
+          </div>
+          <div class="rally-time-row mono">
+            <span>${formatTime(seg.s_cut)} – ${formatTime(seg.e_cut)}</span>
+            <span class="rally-dur">${dur.toFixed(1)}s</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary); margin-top:4px;">
+            <span>第0${seg.game_index || 1}局</span>
+            <span style="color:${seg.enabled ? 'var(--accent)' : 'var(--text-muted)'}; font-weight:500;">
+              ${seg.enabled ? "✓ 已保留" : "⊘ 已跳过"}
+            </span>
+          </div>
         `;
-        grid.appendChild(chip);
+        container.appendChild(card);
       });
     }
 
-    function updateSelectedSegmentUI() {
-      const tl = appState?.timeline;
-      if (!tl || !tl.segments || !tl.segments[selectedSegIdx]) return;
-      const seg = tl.segments[selectedSegIdx];
-      const dur = (seg.e_cut - seg.s_cut).toFixed(1);
-
-      videoEl.poster = `/api/frame?path=${encodeURIComponent(tl.video_path)}&t=${(seg.s_cut + 0.5).toFixed(2)}`;
-
-      document.getElementById("curRallyId").textContent = `#${String(seg.uid).padStart(2, "0")}`;
-      document.getElementById("curRallyRange").textContent = `${fmtSec(seg.s_cut)} – ${fmtSec(seg.e_cut)}`;
-      document.getElementById("curRallyDur").textContent = `${dur}s`;
-
-      const keepBtn = document.getElementById("keepToggleBtn");
-      keepBtn.className = "icon-btn sm " + (seg.enabled ? "active-keep" : "skipped-keep");
-    }
-
-    function selectSegment(idx, autoPlay = true) {
-      const tl = appState?.timeline;
-      if (!tl || !tl.segments || idx < 0 || idx >= tl.segments.length) return;
+    function selectSegment(idx) {
       selectedSegIdx = idx;
-      const seg = tl.segments[idx];
-      updateSelectedSegmentUI();
-      renderChipsGrid(tl);
+      renderTransportInfo();
+      renderRallies();
       drawTimeline();
-
-      const selChip = document.querySelector("#chipsGrid .rally-chip.selected");
-      if (selChip) selChip.scrollIntoView({ block: "nearest" });
-
-      videoEl.currentTime = seg.s_cut;
-      if (autoPlay) {
-        isLoopingSegment = true;
-        videoEl.play().catch(() => {});
-      }
+      seekToSegmentStart();
     }
 
     function stepSegment(delta) {
       const tl = appState?.timeline;
       if (!tl || !tl.segments) return;
-      const next = Math.max(0, Math.min(tl.segments.length - 1, selectedSegIdx + delta));
-      selectSegment(next, true);
+      let next = selectedSegIdx + delta;
+      if (next < 0) next = tl.segments.length - 1;
+      if (next >= tl.segments.length) next = 0;
+      selectSegment(next);
+    }
+
+    function seekToSegmentStart() {
+      const tl = appState?.timeline;
+      if (!tl || !tl.segments[selectedSegIdx]) return;
+      const seg = tl.segments[selectedSegIdx];
+      videoEl.currentTime = seg.s_cut;
     }
 
     function playSelectedSegment() {
       const tl = appState?.timeline;
-      if (!tl || !tl.segments || !tl.segments[selectedSegIdx]) return;
+      if (!tl || !tl.segments[selectedSegIdx]) return;
       const seg = tl.segments[selectedSegIdx];
-      if (!videoEl.paused) {
+      if (videoEl.paused) {
+        if (videoEl.currentTime < seg.s_cut || videoEl.currentTime >= seg.e_cut) {
+          videoEl.currentTime = seg.s_cut;
+        }
+        videoEl.play();
+        isLoopingSegment = true;
+      } else {
         videoEl.pause();
-        return;
+        isLoopingSegment = false;
       }
-      if (videoEl.currentTime < seg.s_cut || videoEl.currentTime >= seg.e_cut - 0.15) {
-        videoEl.currentTime = seg.s_cut;
-      }
-      isLoopingSegment = true;
-      videoEl.play().catch(() => {});
     }
-
-    videoEl.addEventListener("play", () => {
-      document.getElementById("playIconSvg").innerHTML = `<use href="#ic-pause"/>`;
-    });
-
-    videoEl.addEventListener("pause", () => {
-      document.getElementById("playIconSvg").innerHTML = `<use href="#ic-play"/>`;
-    });
 
     videoEl.addEventListener("timeupdate", () => {
-      const tl = appState?.timeline;
-      if (tl && tl.segments && tl.segments[selectedSegIdx] && isLoopingSegment) {
-        const seg = tl.segments[selectedSegIdx];
-        if (videoEl.currentTime >= seg.e_cut) {
-          videoEl.pause();
-          isLoopingSegment = false;
+      drawTimeline();
+      if (isLoopingSegment) {
+        const tl = appState?.timeline;
+        if (tl && tl.segments[selectedSegIdx]) {
+          const seg = tl.segments[selectedSegIdx];
+          if (videoEl.currentTime >= seg.e_cut) {
+            videoEl.currentTime = seg.s_cut;
+          }
         }
       }
-      drawTimeline();
     });
 
-    // ==========================================================================
-    // Interactive Timeline Canvas
-    // ==========================================================================
-    function drawTimeline() {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0) return;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.save();
-      ctx.scale(dpr, dpr);
-
-      const W = rect.width;
-      const H = rect.height;
-      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-
-      ctx.fillStyle = isDark ? "#111114" : "#e8e8ec";
-      ctx.beginPath();
-      ctx.roundRect(0, 0, W, H, 5);
-      ctx.fill();
-
-      const tl = appState?.timeline;
-      if (!tl || !tl.segments || tl.segments.length === 0) {
-        ctx.restore();
-        return;
-      }
-
-      const dur = Math.max(tl.duration || 1, 1);
-      const padX = 6;
-      const trackW = W - padX * 2;
-
-      tl.segments.forEach((s, i) => {
-        const x1 = padX + (s.s_cut / dur) * trackW;
-        const x2 = Math.max(x1 + 2.5, padX + (s.e_cut / dur) * trackW);
-        const inFilter = passesFilter(s);
-
-        if (i === selectedSegIdx) {
-          ctx.fillStyle = "#f59e0b";
-        } else if (!s.enabled) {
-          ctx.fillStyle = isDark ? "#27272a" : "#d4d4d8";
-        } else {
-          ctx.fillStyle = inFilter ? "#10a37f" : "rgba(16,163,127,0.25)";
-        }
-
-        const y = i === selectedSegIdx ? 3 : 6;
-        const h = i === selectedSegIdx ? H - 6 : H - 12;
-        ctx.beginPath();
-        ctx.roundRect(x1, y, x2 - x1, h, 2.5);
-        ctx.fill();
-      });
-
-      const curT = videoEl.currentTime || 0;
-      const px = padX + (curT / dur) * trackW;
-      ctx.strokeStyle = "#ef4444";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(px, 2);
-      ctx.lineTo(px, H - 2);
-      ctx.stroke();
-
-      ctx.restore();
-    }
-
-    window.addEventListener("resize", drawTimeline);
-
-    canvas.addEventListener("mousedown", (e) => {
-      const tl = appState?.timeline;
-      if (!tl || !tl.segments || tl.segments.length === 0) return;
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const padX = 6;
-      const trackW = rect.width - padX * 2;
-      const dur = Math.max(tl.duration || 1, 1);
-
-      const sel = tl.segments[selectedSegIdx];
-      if (sel) {
-        const sx1 = padX + (sel.s_cut / dur) * trackW;
-        const sx2 = padX + (sel.e_cut / dur) * trackW;
-        if (Math.abs(mx - sx1) <= 6) { dragMode = "start"; return; }
-        if (Math.abs(mx - sx2) <= 6) { dragMode = "end"; return; }
-      }
-
-      for (let i = 0; i < tl.segments.length; i++) {
-        const s = tl.segments[i];
-        const x1 = padX + (s.s_cut / dur) * trackW;
-        const x2 = Math.max(x1 + 3, padX + (s.e_cut / dur) * trackW);
-        if (mx >= x1 - 2 && mx <= x2 + 2) {
-          selectSegment(i, true);
-          return;
-        }
-      }
-
-      const clickT = Math.max(0, Math.min(dur, ((mx - padX) / trackW) * dur));
-      videoEl.currentTime = clickT;
-      drawTimeline();
+    videoEl.addEventListener("play", () => {
+      document.getElementById("playIconSvg").innerHTML = '<use href="#ic-pause"/>';
     });
-
-    window.addEventListener("mousemove", (e) => {
-      if (!dragMode) return;
-      const tl = appState?.timeline;
-      if (!tl) return;
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const padX = 6;
-      const trackW = rect.width - padX * 2;
-      const dur = Math.max(tl.duration || 1, 1);
-      const t = Math.max(0, Math.min(dur, ((mx - padX) / trackW) * dur));
-      const seg = tl.segments[selectedSegIdx];
-      if (dragMode === "start" && t < seg.e_cut - 1.0) {
-        seg.s_cut = Math.round(t * 10) / 10;
-        videoEl.currentTime = seg.s_cut;
-      } else if (dragMode === "end" && t > seg.s_cut + 1.0) {
-        seg.e_cut = Math.round(t * 10) / 10;
-        videoEl.currentTime = seg.e_cut;
-      }
-      updateSelectedSegmentUI();
-      drawTimeline();
+    videoEl.addEventListener("pause", () => {
+      document.getElementById("playIconSvg").innerHTML = '<use href="#ic-play"/>';
     });
-
-    window.addEventListener("mouseup", async () => {
-      if (!dragMode) return;
-      dragMode = null;
-      const tl = appState?.timeline;
-      if (tl && tl.segments[selectedSegIdx]) {
-        const seg = tl.segments[selectedSegIdx];
-        const st = await apiPost("/api/update_segment", {
-          uid: seg.uid,
-          action: "set_time",
-          s_cut: seg.s_cut,
-          e_cut: seg.e_cut,
-        });
-        renderAll(st, true);
-      }
-    });
-
-    // ==========================================================================
-    // API Actions
-    // ==========================================================================
-    async function selectVideo(path) {
-      const st = await apiPost("/api/select_video", { path });
-      renderAll(st, false);
-    }
-
-    async function browseNative(kind) {
-      const st = await apiPost("/api/browse", { kind });
-      renderAll(st, true);
-    }
-
-    function toggleModePill(key) {
-      const cur = new Set(selectedModes);
-      if (cur.has(key)) {
-        if (cur.size > 1) cur.delete(key);
-      } else {
-        cur.add(key);
-      }
-      selectedModes = Array.from(cur);
-      renderAll(appState, true);
-    }
-
-    function resetDefaultMode() {
-      selectedModes = ["all"];
-      renderAll(appState, true);
-    }
-
-    function toggleSettings(open) {
-      document.getElementById("settingsModal").classList.toggle("open", open);
-    }
-
-    function onSliderInput() {
-      document.getElementById("valMinHits").textContent = `${document.getElementById("slMinHits").value}`;
-      document.getElementById("valMinDur").textContent = `${Number(document.getElementById("slMinDur").value).toFixed(1)}s`;
-      document.getElementById("valRestGap").textContent = `${Number(document.getElementById("slRestGap").value).toFixed(0)}s`;
-      document.getElementById("valMinGameRallies").textContent = `${document.getElementById("slMinGameRallies").value}`;
-    }
-
-    async function savePrefsFromUI() {
-      const st = await apiPost("/api/save_prefs", {
-        output_dir: document.getElementById("outDirInput").value,
-      });
-      renderAll(st, true);
-    }
-
-    function resetSliders() {
-      document.getElementById("slMinHits").value = 5;
-      document.getElementById("slMinDur").value = 5.0;
-      document.getElementById("slRestGap").value = 22.0;
-      document.getElementById("slMinGameRallies").value = 8;
-      onSliderInput();
-    }
-
-    async function toggleTheme() {
-      const cur = document.documentElement.getAttribute("data-theme");
-      const next = cur === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      drawTimeline();
-      const st = await apiPost("/api/save_prefs", { theme_mode: next });
-      renderAll(st, true);
-    }
 
     async function nudgeEdge(which, delta) {
       const tl = appState?.timeline;
@@ -1638,9 +1553,9 @@
         delta_end: which === "end" ? delta : 0.0,
       });
       renderAll(st, true);
-      const updatedSeg = st.timeline?.segments?.[selectedSegIdx];
-      if (updatedSeg) {
-        videoEl.currentTime = which === "start" ? updatedSeg.s_cut : Math.max(updatedSeg.s_cut, updatedSeg.e_cut - 0.8);
+      const updated = st.timeline?.segments?.[selectedSegIdx];
+      if (updated) {
+        videoEl.currentTime = which === "start" ? updated.s_cut : Math.max(updated.s_cut, updated.e_cut - 0.5);
       }
     }
 
@@ -1651,8 +1566,8 @@
       const cur = videoEl.currentTime || 0;
       let ns = seg.s_cut;
       let ne = seg.e_cut;
-      if (which === "start" && cur < ne - 0.8) ns = cur;
-      if (which === "end" && cur > ns + 0.8) ne = cur;
+      if (which === "start" && cur < ne - 0.5) ns = cur;
+      if (which === "end" && cur > ns + 0.5) ne = cur;
       const st = await apiPost("/api/update_segment", {
         uid: seg.uid,
         action: "set_time",
@@ -1663,14 +1578,10 @@
     }
 
     async function toggleSelectedSegment() {
-      await toggleSegmentAtIndex(selectedSegIdx);
-    }
-
-    async function toggleSegmentAtIndex(idx) {
       const tl = appState?.timeline;
-      if (!tl || !tl.segments[idx]) return;
+      if (!tl || !tl.segments[selectedSegIdx]) return;
       const st = await apiPost("/api/update_segment", {
-        uid: tl.segments[idx].uid,
+        uid: tl.segments[selectedSegIdx].uid,
         action: "toggle",
       });
       renderAll(st, true);
@@ -1680,7 +1591,7 @@
       const tl = appState?.timeline;
       if (!tl || !tl.segments) return;
       for (const s of tl.segments) {
-        const shouldKeep = action === "enable_all" ? true : (s.e_cut - s.s_cut >= 15.0);
+        const shouldKeep = action === "enable_all" ? true : ((s.e_cut - s.s_cut) >= 15.0);
         if (s.enabled !== shouldKeep) {
           await apiPost("/api/update_segment", { uid: s.uid, action: "toggle" });
         }
@@ -1689,7 +1600,66 @@
       renderAll(st, true);
     }
 
+    async function selectVideo(path) {
+      const st = await apiPost("/api/select_video", { path });
+      selectedSegIdx = 0;
+      renderAll(st, false);
+    }
+
+    async function browseNative(kind) {
+      const st = await apiPost("/api/browse", { kind });
+      renderAll(st, false);
+    }
+
+    function toggleSettings(show) {
+      document.getElementById("settingsModal").style.display = show ? "flex" : "none";
+      if (show && appState) {
+        document.getElementById("outDirInput").value = appState.output_dir || "";
+      }
+    }
+
+    function onSliderInput() {
+      document.getElementById("valMinHits").textContent = `${document.getElementById("slMinHits").value} 拍`;
+      document.getElementById("valMinDur").textContent = `${Number(document.getElementById("slMinDur").value).toFixed(1)}s`;
+      document.getElementById("valRestGap").textContent = `${document.getElementById("slRestGap").value}s`;
+      document.getElementById("valMinGameRallies").textContent = `${document.getElementById("slMinGameRallies").value} 拍`;
+      savePrefsFromUI();
+    }
+
+    function resetSliders() {
+      document.getElementById("slMinHits").value = 5;
+      document.getElementById("slMinDur").value = 5.0;
+      document.getElementById("slRestGap").value = 22.0;
+      document.getElementById("slMinGameRallies").value = 8;
+      onSliderInput();
+    }
+
+    async function savePrefsFromUI() {
+      const out = document.getElementById("outDirInput").value;
+      await apiPost("/api/save_prefs", {
+        output_dir: out,
+        min_hits: Number(document.getElementById("slMinHits").value),
+        min_dur: Number(document.getElementById("slMinDur").value),
+        rest_gap: Number(document.getElementById("slRestGap").value),
+        min_game_rallies: Number(document.getElementById("slMinGameRallies").value),
+      });
+    }
+
+    async function toggleTheme() {
+      const cur = document.documentElement.getAttribute("data-theme") || "dark";
+      const next = cur === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      drawTimeline();
+      await apiPost("/api/save_prefs", { theme_mode: next });
+    }
+
     async function startJob(kind) {
+      const isRunning = appState?.job?.is_running;
+      if (isRunning) {
+        const st = await apiPost("/api/stop_job");
+        renderAll(st, true);
+        return;
+      }
       const jobType = kind === "scan" ? "force_rescan" : "one_click";
       const st = await apiPost("/api/start_job", {
         job_type: jobType,
@@ -1705,10 +1675,51 @@
       renderAll(st, true);
     }
 
+    function renderJobState(job) {
+      const btn = document.getElementById("mainExportBtn");
+      const label = document.getElementById("exportBtnLabel");
+      const icon = document.getElementById("exportBtnIcon");
+      const ribbon = document.getElementById("topRibbonFill");
+      const pBox = document.getElementById("progressBox");
+      const pFill = document.getElementById("progressFill");
+      const pStep = document.getElementById("progressStepText");
+      const pPct = document.getElementById("progressPctText");
+      const topPill = document.getElementById("topJobPill");
+      const topText = document.getElementById("topJobText");
+
+      if (job && job.is_running) {
+        btn.className = "btn-export-main running";
+        label.textContent = "⏹ 停止剪辑任务";
+        icon.innerHTML = '<use href="#ic-stop"/>';
+
+        const pct = Math.min(100, Math.max(0, job.pct || 0));
+        ribbon.style.width = `${pct}%`;
+        ribbon.classList.add("active");
+
+        pBox.style.display = "flex";
+        pFill.style.width = `${pct}%`;
+        pStep.textContent = job.message || "正在处理视频...";
+        pPct.textContent = `${pct}%`;
+
+        topPill.style.display = "inline-flex";
+        topText.textContent = `正在剪辑 ${pct}%`;
+      } else {
+        btn.className = "btn-export-main";
+        label.textContent = "⚡ 导出比赛集锦";
+        icon.innerHTML = '<use href="#ic-export"/>';
+
+        ribbon.style.width = "0%";
+        ribbon.classList.remove("active");
+        pBox.style.display = "none";
+        topPill.style.display = "none";
+      }
+    }
+
     async function openOutputFolder() {
       await apiPost("/api/open_folder", {});
     }
 
+    // Keyboard Shortcuts
     window.addEventListener("keydown", (e) => {
       if (e.target.tagName === "INPUT") return;
       if (e.code === "Space") {
@@ -1720,9 +1731,36 @@
       } else if (e.code === "ArrowDown" || e.code === "ArrowRight") {
         e.preventDefault();
         stepSegment(1);
+      } else if (e.code === "KeyI") {
+        e.preventDefault();
+        setEdgeToPlayhead("start");
+      } else if (e.code === "KeyO") {
+        e.preventDefault();
+        setEdgeToPlayhead("end");
       } else if (e.code === "Backspace" || e.code === "Delete") {
         e.preventDefault();
         toggleSelectedSegment();
+      }
+    });
+
+    // Timeline Click
+    canvas.addEventListener("click", (e) => {
+      const tl = appState?.timeline;
+      if (!tl || !videoEl || !videoEl.duration) return;
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const ratio = clickX / rect.width;
+      const targetT = ratio * (tl.duration || videoEl.duration);
+      videoEl.currentTime = targetT;
+
+      if (tl.segments) {
+        for (let i = 0; i < tl.segments.length; i++) {
+          const s = tl.segments[i];
+          if (targetT >= s.s_cut && targetT <= s.e_cut) {
+            selectSegment(i);
+            break;
+          }
+        }
       }
     });
 
@@ -1735,7 +1773,7 @@
           const updated = await apiGet("/api/state");
           renderAll(updated, true);
         }
-      }, 250);
+      }, 300);
     })();
   </script>
 </body>
