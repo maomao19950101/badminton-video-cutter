@@ -43,7 +43,7 @@ from modes_handler import (
     categorize_showcase_rallies,
 )
 
-__version__ = "1.8.2"
+__version__ = "1.8.3"
 
 
 def resolve_ffmpeg_bin():
@@ -331,6 +331,11 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
         return False
     # Completely empty/dormant court
     if avg_our < 4.8 or max_our < 7.5:
+        return False
+    # Casual walking / non-play intermission stroll:
+    # In genuine badminton doubles, at least one explosive stroke/lunge/dive occurs (max_our >= 13.5 or max_near >= 12.0).
+    # Rejects dead-ball walking intervals where adjacent court smashes produce false acoustic clusters.
+    if max_our < 13.5 and max_near < 12.0:
         return False
     # Far court dormant (players standing around waiting, drinking water, changing balls)
     if avg_far < 5.5 and max_far < 8.5:
