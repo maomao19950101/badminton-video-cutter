@@ -1232,6 +1232,10 @@
       appState = state;
       if (!state) return;
 
+      if (state.theme_mode) {
+        document.documentElement.setAttribute("data-theme", state.theme_mode);
+      }
+
       // 1. Stats
       const tl = state.timeline;
       let keptCount = 0;
@@ -1248,14 +1252,15 @@
       document.getElementById("topDurVal").textContent = formatTimeBrief(keptDur);
 
       // 2. Video Player
-      if (state.current_video && (!preserveVideo || loadedVideoPath !== state.current_video)) {
-        loadedVideoPath = state.current_video;
-        videoEl.src = `/api/video_stream?path=${encodeURIComponent(state.current_video)}`;
+      const curVideo = state.current_vpath || state.current_video;
+      if (curVideo && (!preserveVideo || loadedVideoPath !== curVideo)) {
+        loadedVideoPath = curVideo;
+        videoEl.src = `/api/video_stream?path=${encodeURIComponent(curVideo)}`;
         videoEl.load();
       }
 
       // 3. Render Videos
-      renderVideoList(state.videos || [], state.current_video);
+      renderVideoList(state.videos || [], curVideo);
 
       // 4. Render Mode Cards
       renderModes();
@@ -1287,16 +1292,18 @@
         return;
       }
       videos.forEach(v => {
-        const isCur = v === curVideo;
-        const name = v.split("/").pop().split("\\").pop();
+        const vPath = typeof v === "object" ? (v.path || "") : v;
+        const vName = typeof v === "object" ? (v.name || vPath.split("/").pop().split("\\").pop()) : vPath.split("/").pop().split("\\").pop();
+        const isCur = vPath === curVideo;
+        const count = typeof v === "object" && v.rally_count ? `${v.rally_count}拍` : "已解析";
         const card = document.createElement("div");
         card.className = `video-card ${isCur ? "active" : ""}`;
-        card.onclick = () => selectVideo(v);
+        card.onclick = () => selectVideo(vPath);
         card.innerHTML = `
-          <div class="video-name" title="${name}">${name}</div>
+          <div class="video-name" title="${vName}">${vName}</div>
           <div class="video-meta">
-            <span class="video-tag">已解析</span>
-            <span class="mono">当前对战</span>
+            <span class="video-tag">${count}</span>
+            <span class="mono">${isCur ? "当前对战" : "就绪"}</span>
           </div>
         `;
         container.appendChild(card);
