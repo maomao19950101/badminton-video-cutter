@@ -43,7 +43,7 @@ from modes_handler import (
     categorize_showcase_rallies,
 )
 
-__version__ = "1.8.3"
+__version__ = "1.8.4"
 
 
 def resolve_ffmpeg_bin():
@@ -325,6 +325,7 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     max_near = float(max([m[2] for m in motions]))
     top_d_max = float(max([m[3] for m in motions]))
     b_avg = float(np.mean([m[4] for m in motions]))
+    b_max_all = float(max([m[4] for m in motions]))
 
     # Handheld mount/unmount camera shake
     if top_d_max > 9.0 and avg_our < 6.0:
@@ -350,6 +351,17 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     # Background/Adjacent court dominant motion while near court is sluggish
     if avg_near < 6.2 and (b_avg >= 11.0 or avg_far >= 16.0):
         return False
+    # Walk-off / Personnel exit & substitution suppression (散场走动近镜头/过道走动特征 - v1.8.4)
+    # When players finish a game/point and walk off towards camera/benches, or cross the camera walkway:
+    # In genuine rallies, players start in service ready stances strictly within court lines (opening b_max < 10.0).
+    # If the clip has high boundary corridor movement (b_avg >= 14.0 and b_max_all >= 25.0):
+    #   - Opening walkway congestion: If opening boundary motion is high (motions[0][4] >= 12.0 or motions[1][4] >= 25.0),
+    #     people are already in the camera exit walkway when the clip begins -> reject.
+    #   - Extreme corridor dominance: If overall boundary corridor motion is extreme (b_avg >= 17.0),
+    #     continuous walkway congestion right past the lens indicates intermission walk-off -> reject.
+    if b_avg >= 14.0 and b_max_all >= 25.0:
+        if motions[0][4] >= 12.0 or motions[1][4] >= 25.0 or b_avg >= 17.0:
+            return False
     return True
 
 

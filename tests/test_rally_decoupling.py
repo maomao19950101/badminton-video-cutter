@@ -470,6 +470,39 @@ class TestRallyDecoupling(unittest.TestCase):
         self.assertEqual(r["first_hit"], 598.54)
         self.assertEqual(r["hits"], 5)
 
+    def test_check_clip_is_real_play_rejects_walkoff_corridor(self):
+        """
+        Tests that check_clip_is_real_play rejects walk-off intervals where players
+        have exited the court and walk along the camera walkway with backpacks/phones (v1.8.4).
+        """
+        from badminton_cutter import check_clip_is_real_play
+        from unittest.mock import patch
+
+        # Mock motions for a walk-off interval (UID 33: b_avg >= 14.0, b_max >= 25.0, opening b_max >= 12.0)
+        def mock_walkoff_motion(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            # our_m, far_m, near_m, top_d, b_max
+            return (21.0, 25.0, 17.0, 1.8, 30.0)
+
+        peaks = [(1047.7, 1.8e7), (1049.2, 2.8e7), (1050.0, 6.7e6), (1051.2, 9.7e6), (1051.9, 2.5e7)]
+        with patch("os.path.exists", return_value=True), patch("badminton_cutter.sample_instant_motion", side_effect=mock_walkoff_motion):
+            is_real = check_clip_is_real_play(
+                cap="dummy_cap", fps=30.0, s_cut=1046.0, e_cut=1054.0,
+                min_dur=5.0, r_peaks=peaks, vpath="/dummy/video.mp4", min_hits=5
+            )
+        self.assertFalse(is_real, "Walk-off corridor motion must be rejected by check_clip_is_real_play")
+
+        # Mock motions for an authentic rally (UID 10: opening b_max is low 2.7, play is active)
+        def mock_authentic_motion(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            # Returns normal rally motion with low boundary movement
+            return (18.0, 16.0, 20.0, 1.5, 4.0)
+
+        with patch("os.path.exists", return_value=True), patch("badminton_cutter.sample_instant_motion", side_effect=mock_authentic_motion):
+            is_real = check_clip_is_real_play(
+                cap="dummy_cap", fps=30.0, s_cut=209.0, e_cut=231.0,
+                min_dur=5.0, r_peaks=peaks, vpath="/dummy/video.mp4", min_hits=5
+            )
+        self.assertTrue(is_real, "Authentic rally must pass check_clip_is_real_play")
+
 
 if __name__ == "__main__":
     unittest.main()
