@@ -4,6 +4,7 @@ Unit tests for Badminton Rally Decoupling & Dead-Ball Separation (v1.4.4).
 """
 
 import unittest
+from unittest.mock import patch
 import os
 import sys
 
@@ -502,6 +503,49 @@ class TestRallyDecoupling(unittest.TestCase):
                 min_dur=5.0, r_peaks=peaks, vpath="/dummy/video.mp4", min_hits=5
             )
         self.assertTrue(is_real, "Authentic rally must pass check_clip_is_real_play")
+
+    def test_pre_serve_ball_picking_walking_pruned(self):
+        """
+        Tests that extract_multi_shot_rallies prunes leading dead-ball walking / ball-picking hits
+        clustered before the genuine serve by identifying the pre-serve stationary trough (v1.8.5).
+        """
+        # Walking/ball-picking noise hits (gaps < 2.0s), followed by pre-serve stillness and genuine serve
+        peaks = [
+            (1243.04, 7.1e6),  # Walking step / floor tap
+            (1244.12, 1.7e7),  # Walking step / adjacent noise
+            (1245.83, 2.3e7),  # Footstep
+            (1247.80, 6.2e6),  # Walking back to position
+            (1249.50, 6.0e6),  # Ball bounce / tap
+            (1251.00, 7.0e6),  # Settling into stance
+            (1252.78, 1.0e7),  # Genuine serve (preceded by stillness at 1250-1252)
+            (1253.73, 2.5e7),  # Return
+            (1254.32, 1.5e7),  # Stroke 3
+            (1255.06, 1.5e7),  # Stroke 4
+            (1256.12, 1.8e7),  # Stroke 5
+            (1257.10, 2.0e7),  # Stroke 6
+        ]
+
+        def mock_motion(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            if 1242.0 <= t_sec < 1250.0:
+                # Walking to pick up ball (active footsteps, no pre-serve stance)
+                return (14.0, 18.0, 8.0, 1.0, 3.0)
+            elif 1250.0 <= t_sec < 1252.0:
+                # Pre-serve stationary trough (players standing still in service boxes)
+                return (3.8, 6.0, 1.5, 0.8, 2.5)
+            else:
+                # Active rally play after serve
+                return (18.0, 24.0, 12.0, 0.9, 3.5)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion):
+            rallies = extract_multi_shot_rallies(peaks, v_dur=1800.0, min_hits=5, vpath="/dummy/video.mp4")
+
+        self.assertEqual(len(rallies), 1)
+        r = rallies[0]
+        # Must be anchored to the authentic serve at 1252.78 - 0.75 = 1252.03s,
+        # NOT the initial walking at 1243.04!
+        self.assertAlmostEqual(r["s_cut"], 1252.78 - 0.75, places=2)
+        self.assertEqual(r["first_hit"], 1252.78)
+        self.assertEqual(r["hits"], 6)
 
 
 if __name__ == "__main__":

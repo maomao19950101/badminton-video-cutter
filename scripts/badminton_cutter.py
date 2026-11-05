@@ -434,7 +434,7 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
     return verified
 
 
-def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits=5, cap=None, fps=0.0, vpath=None):
+def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits=5, cap=None, fps=0.0, vpath=None, ffmpeg_bin=DEFAULT_FFMPEG):
     """
     Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.7):
     1. Initial Clustering with max_gap=2.85s:
@@ -586,26 +586,32 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
         if max_energy < 1.8e7:
             continue
 
-        # Rule 4: Pre-Serve Stationary Boundary & True Serve Anchoring (发球静止定界与真发球锚定 - v1.8.2)
-        # In badminton rules (Rule 9.1), server & receiver must remain stationary in service boxes before serve.
-        # Optical motion drops to a stationary trough (near <= 8.5, our <= 8.5) right before the serve,
-        # followed by an active court motion surge (near >= 12.0 or our >= 10.0) upon serve and return.
-        # If the cluster starts with hits where near court is dormant (near < 8.0) or players are walking,
-        # seeks forward to the first authentic serve preceded by a stationary trough, pruning leading adjacent-court acoustic noise.
-        if (cap is not None or (vpath and os.path.exists(vpath))) and len(c) >= min_hits + 1:
-            for k in range(min(len(c) - min_hits, 8)):
-                t_k = c[k][0]
-                m_after = sample_instant_motion(cap, fps, t_k + 0.8, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
-                if m_after is None:
-                    break
-                our_after, far_after, near_after, _, _ = m_after
-                is_active = (near_after >= 12.0 or our_after >= 12.0)
-                if is_active:
-                    if k > 0:
-                        m_pre = sample_instant_motion(cap, fps, t_k - 0.75, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
-                        if m_pre is not None and (m_pre[2] <= 8.5 or m_pre[0] <= 8.5):
-                            c = c[k:]
-                    break
+        # Rule 4: Pre-Serve Stationary Boundary & True Serve Anchoring (发球静止定界与真发球锚定 - v1.8.5)
+        # Under BWF Rule 9.1, server and receiver must remain stationary in service boxes before serve.
+        # If a cluster begins with footsteps, ball-picking walking noise, or adjacent-court hits:
+        # 1. Inspect whether c[0] was preceded by stationary stillness (our_m <= 7.5 and near_m <= 7.0).
+        # 2. If c[0] was walking noise, scan forward to locate the authentic opening serve:
+        #    a stroke c[k] preceded by a stationary trough and immediately followed by active rally surge.
+        # Prunes all preceding dead-ball walking hits, eliminating leading ball-picking dead time completely.
+        has_video_source = (cap is not None) or (vpath is not None)
+        if has_video_source and len(c) >= min_hits + 1:
+            m_0 = sample_instant_motion(cap, fps, c[0][0] - 0.85, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
+            is_c0_still = (m_0 is not None and m_0[0] <= 7.5 and m_0[2] <= 7.0)
+
+            if not is_c0_still:
+                best_serve_k = 0
+                max_search_k = min(len(c) - min_hits, 16)
+                for k in range(1, max_search_k + 1):
+                    t_k = c[k][0]
+                    m_pre1 = sample_instant_motion(cap, fps, t_k - 0.85, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
+                    m_pre2 = sample_instant_motion(cap, fps, t_k - 1.50, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
+                    was_still = any(m is not None and m[0] <= 7.5 and m[2] <= 7.0 for m in [m_pre1, m_pre2])
+                    if was_still:
+                        m_post = sample_instant_motion(cap, fps, t_k + 0.65, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
+                        if m_post and (m_post[0] >= 12.0 or m_post[2] >= 9.0):
+                            best_serve_k = k
+                if best_serve_k > 0:
+                    c = c[best_serve_k:]
 
         s_cut = max(0.0, c[0][0] - 0.75)
         last_hit = c[-1][0]
