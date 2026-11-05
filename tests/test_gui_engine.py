@@ -191,7 +191,7 @@ class TestGuiEngine(unittest.TestCase):
         self.assertIn("light", THEMES)
         for mode in ("dark", "light"):
             palette = THEMES[mode]
-            self.assertEqual(palette["accent_emerald"], "#10A37F")
+            self.assertEqual(palette["accent_blue"], "#0A84FF")
             for key in (
                 "bg_app",
                 "bg_header",

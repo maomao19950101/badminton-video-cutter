@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller Spec for 羽毛球AI剪辑大师 (Codex Studio Windows 64-bit Standalone Edition v1.8.0)
+PyInstaller Spec for 羽毛球比赛剪辑工作室 (Badminton Studio Pro Windows 64-bit Standalone Edition)
 Build command on Windows:
     pyinstaller --noconfirm --clean BadmintonAICutter_Win64.spec
 """
@@ -48,7 +48,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="羽毛球AI剪辑大师",
+    name="羽毛球比赛剪辑工作室",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -70,5 +70,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="羽毛球AI剪辑大师",
+    name="羽毛球比赛剪辑工作室",
 )

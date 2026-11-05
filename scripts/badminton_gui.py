@@ -51,63 +51,63 @@ from gui_engine import (
 )
 
 # =============================================================================
-# OpenAI Codex Design System Palettes (Dark & Light)
+# Apple Pro NLE Design System Palettes (Dark & Light)
 # =============================================================================
 THEMES: Dict[str, Dict[str, str]] = {
     "dark": {
         "name": "dark",
-        "bg_app": "#0D0D0D",          # Deep Codex carbon background
-        "bg_header": "#121212",       # Top navigation bar
-        "bg_sidebar": "#171717",      # Left sidebar surface
-        "bg_panel": "#171717",        # Main workspace panel
-        "bg_card": "#212121",         # Elevated card surface
-        "bg_well": "#111111",         # Input / canvas recessed well
-        "bg_hover": "#2F2F2F",        # Subtle hover state
-        "border": "#2E2E2E",          # 1px hairline divider
-        "fg_primary": "#ECECEC",      # Crisp primary text
-        "fg_secondary": "#9B9B9B",    # Muted secondary label
-        "fg_muted": "#6E6E6E",        # Subtle hint / ruler text
-        "btn_primary_bg": "#ECECEC",  # Signature Codex high-contrast white pill
-        "btn_primary_fg": "#0D0D0D",
-        "btn_primary_hover": "#FFFFFF",
-        "btn_secondary_bg": "#262626",
-        "btn_secondary_fg": "#ECECEC",
-        "btn_secondary_hover": "#333333",
-        "accent_emerald": "#10A37F",  # OpenAI / Codex signature emerald
-        "accent_emerald_hover": "#0E906F",
-        "accent_amber": "#F59E0B",
-        "accent_blue": "#3B82F6",
-        "accent_red": "#EF4444",
-        "block_disabled": "#2A2A2A",
-        "tree_sel_bg": "#10A37F",
+        "bg_app": "#16161A",          # Studio Slate Gray canvas
+        "bg_header": "#1E1E24",       # Top navigation bar
+        "bg_sidebar": "#1E1E24",      # Left sidebar surface
+        "bg_panel": "#1E1E24",        # Main workspace panel
+        "bg_card": "#22222A",         # Elevated card surface
+        "bg_well": "#141418",         # Input / canvas recessed well
+        "bg_hover": "#2A2A34",        # Subtle hover state
+        "border": "#2E2E38",          # 1px hairline divider
+        "fg_primary": "#F5F5F7",      # Apple SF Pro crisp primary text
+        "fg_secondary": "#8E8E93",    # Apple secondary slate label
+        "fg_muted": "#636366",        # Apple tertiary hint text
+        "btn_primary_bg": "#0A84FF",  # Apple Pro Blue primary action
+        "btn_primary_fg": "#FFFFFF",
+        "btn_primary_hover": "#0071E3",
+        "btn_secondary_bg": "#2C2C34",
+        "btn_secondary_fg": "#F5F5F7",
+        "btn_secondary_hover": "#383842",
+        "accent_emerald": "#0A84FF",  # Apple Pro Blue accent
+        "accent_emerald_hover": "#0071E3",
+        "accent_amber": "#FF9F0A",
+        "accent_blue": "#0A84FF",
+        "accent_red": "#FF453A",
+        "block_disabled": "#2A2A34",
+        "tree_sel_bg": "#0A84FF",
         "tree_sel_fg": "#FFFFFF",
     },
     "light": {
         "name": "light",
-        "bg_app": "#F3F4F6",          # Clean neutral workspace backdrop
+        "bg_app": "#F5F5F7",          # Neutral clean workspace backdrop
         "bg_header": "#FFFFFF",       # Pure white top bar
-        "bg_sidebar": "#F9FAFB",      # Codex warm off-white sidebar
+        "bg_sidebar": "#FFFFFF",      # Crisp white sidebar
         "bg_panel": "#FFFFFF",        # Crisp white main surface
-        "bg_card": "#F9FAFB",         # Subtle card container
-        "bg_well": "#F3F4F6",         # Recessed input / canvas well
-        "bg_hover": "#E5E7EB",        # Hover state
-        "border": "#E5E7EB",          # 1px crisp light border
-        "fg_primary": "#0D0D0D",      # Deep ink primary text
-        "fg_secondary": "#52525B",    # Secondary slate text
-        "fg_muted": "#9CA3AF",        # Subtle hint text
-        "btn_primary_bg": "#0D0D0D",  # Signature Codex black pill button
+        "bg_card": "#F5F5F7",         # Subtle card container
+        "bg_well": "#E5E5EA",         # Recessed input / canvas well
+        "bg_hover": "#E5E5EA",        # Hover state
+        "border": "#D1D1D6",          # 1px crisp light border
+        "fg_primary": "#1D1D1F",      # Deep ink primary text
+        "fg_secondary": "#86868B",    # Secondary slate text
+        "fg_muted": "#AEAEB2",        # Subtle hint text
+        "btn_primary_bg": "#0A84FF",  # Apple Pro Blue action
         "btn_primary_fg": "#FFFFFF",
-        "btn_primary_hover": "#262626",
-        "btn_secondary_bg": "#FFFFFF",
-        "btn_secondary_fg": "#18181B",
-        "btn_secondary_hover": "#F4F4F5",
-        "accent_emerald": "#10A37F",  # OpenAI / Codex signature emerald
-        "accent_emerald_hover": "#0D8A6A",
+        "btn_primary_hover": "#0071E3",
+        "btn_secondary_bg": "#E5E5EA",
+        "btn_secondary_fg": "#1D1D1F",
+        "btn_secondary_hover": "#D1D1D6",
+        "accent_emerald": "#0A84FF",  # Apple Pro Blue accent
+        "accent_emerald_hover": "#0071E3",
         "accent_amber": "#D97706",
-        "accent_blue": "#2563EB",
+        "accent_blue": "#0A84FF",
         "accent_red": "#DC2626",
         "block_disabled": "#D1D5DB",
-        "tree_sel_bg": "#10A37F",
+        "tree_sel_bg": "#0A84FF",
         "tree_sel_fg": "#FFFFFF",
     },
 }
@@ -312,7 +312,7 @@ class BadmintonCutterGUI:
         self.palette = THEMES.get(self.theme_mode, THEMES["dark"])
 
         self.root.title(
-            f"Codex Studio · 羽毛球 AI 视频剪辑大师 v{__version__}  [{self.hw_encoder}]"
+            f"羽毛球比赛剪辑工作室 · Badminton Studio Pro v{__version__}  [{self.hw_encoder}]"
         )
         self.root.geometry("1440x900")
         self.root.minsize(1200, 780)
@@ -575,15 +575,15 @@ class BadmintonCutterGUI:
         title_box.pack(side=tk.LEFT, padx=14, pady=8)
 
         self._reg_label(
-            tk.Label(title_box, text="🏸 羽毛球 AI 剪辑大师", font=(self.font_family, 13, "bold")),
+            tk.Label(title_box, text="🏸 羽毛球比赛剪辑工作室", font=(self.font_family, 13, "bold")),
             "bg_header",
             "fg_primary",
         ).pack(side=tk.LEFT)
 
         self._reg_label(
-            tk.Label(title_box, text=f"  v{__version__} · Codex Studio  ", font=(self.mono_font, 9)),
+            tk.Label(title_box, text=f"  v{__version__} · Studio Pro  ", font=(self.mono_font, 9)),
             "bg_header",
-            "accent_emerald",
+            "accent_blue",
         ).pack(side=tk.LEFT, padx=(6, 0))
 
         self._reg_label(
