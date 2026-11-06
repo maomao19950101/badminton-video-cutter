@@ -13,7 +13,7 @@ SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scr
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from badminton_cutter import extract_multi_shot_rallies
+from badminton_cutter import extract_multi_shot_rallies, check_clip_is_real_play
 
 
 class TestRallyDecoupling(unittest.TestCase):
@@ -546,6 +546,36 @@ class TestRallyDecoupling(unittest.TestCase):
         self.assertAlmostEqual(r["s_cut"], 1252.78 - 0.75, places=2)
         self.assertEqual(r["first_hit"], 1252.78)
         self.assertEqual(r["hits"], 6)
+
+    def test_walkoff_pedestrian_corridor_rejected(self):
+        """
+        Tests that check_clip_is_real_play rejects camera corridor walkway congestion / walk-offs
+        during non-play intermissions (b_avg >= 14.0, b_max_all >= 25.0, max_our < 30.0),
+        while protecting explosive live rallies where smashes approach boundary lines (v1.8.7).
+        """
+        # Fake walk-off: people strolling past lens, non-explosive court motion (max_our = 19.8)
+        def mock_motion_fake(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            return (15.4, 17.1, 13.9, 1.5, 42.5)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion_fake):
+            is_real = check_clip_is_real_play(
+                cap="dummy", fps=30.0, s_cut=597.0, e_cut=606.0,
+                min_dur=5.0, r_peaks=[(598.0, 1e7), (599.0, 1e7), (600.0, 1e7), (601.0, 1e7), (602.0, 1e7)],
+                vpath="/dummy/video.mp4"
+            )
+        self.assertFalse(is_real, "Corridor walk-off with non-explosive court motion must be rejected")
+
+        # Real rally: explosive smash (max_our = 35.9), even with boundary motion
+        def mock_motion_real(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            return (35.9, 39.2, 33.3, 2.0, 39.3)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion_real):
+            is_real = check_clip_is_real_play(
+                cap="dummy", fps=30.0, s_cut=807.0, e_cut=816.0,
+                min_dur=5.0, r_peaks=[(808.0, 1e7), (809.0, 1e7), (810.0, 1e7), (811.0, 1e7), (812.0, 1e7)],
+                vpath="/dummy/video.mp4"
+            )
+        self.assertTrue(is_real, "Explosive live rally must be preserved even with boundary motion")
 
 
 if __name__ == "__main__":

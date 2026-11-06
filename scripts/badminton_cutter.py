@@ -351,17 +351,19 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     # Background/Adjacent court dominant motion while near court is sluggish
     if avg_near < 6.2 and (b_avg >= 11.0 or avg_far >= 16.0):
         return False
-    # Walk-off / Personnel exit & substitution suppression (散场走动近镜头/过道走动特征 - v1.8.4)
+    # Walk-off / Personnel exit & substitution suppression (散场走动近镜头/过道走动特征 - v1.8.7)
     # When players finish a game/point and walk off towards camera/benches, or cross the camera walkway:
     # In genuine rallies, players start in service ready stances strictly within court lines (opening b_max < 10.0).
     # If the clip has high boundary corridor movement (b_avg >= 14.0 and b_max_all >= 25.0):
+    #   - Rejects walkway congestion unless court trapezoid itself exhibits explosive real rally motion (max_our >= 30.0)
     #   - Opening walkway congestion: If opening boundary motion is high (motions[0][4] >= 12.0 or motions[1][4] >= 25.0),
     #     people are already in the camera exit walkway when the clip begins -> reject.
     #   - Extreme corridor dominance: If overall boundary corridor motion is extreme (b_avg >= 17.0),
     #     continuous walkway congestion right past the lens indicates intermission walk-off -> reject.
     if b_avg >= 14.0 and b_max_all >= 25.0:
-        if motions[0][4] >= 12.0 or motions[1][4] >= 25.0 or b_avg >= 17.0:
-            return False
+        if max_our < 30.0:
+            if motions[0][4] >= 12.0 or motions[1][4] >= 25.0 or b_avg >= 17.0:
+                return False
     return True
 
 
@@ -603,6 +605,11 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
                 max_search_k = min(len(c) - min_hits, 16)
                 for k in range(1, max_search_k + 1):
                     t_k = c[k][0]
+                    # Realistic serve flight time to return stroke: at least 0.60s (net crossing) and at most 2.60s (high lob return)
+                    if k + 1 < len(c):
+                        g_ret = c[k + 1][0] - t_k
+                        if g_ret < 0.60 or g_ret > 2.60:
+                            continue
                     m_pre1 = sample_instant_motion(cap, fps, t_k - 0.85, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
                     m_pre2 = sample_instant_motion(cap, fps, t_k - 1.50, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
                     was_still = any(m is not None and m[0] <= 7.5 and m[2] <= 7.0 for m in [m_pre1, m_pre2])
@@ -610,6 +617,7 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
                         m_post = sample_instant_motion(cap, fps, t_k + 0.65, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
                         if m_post and (m_post[0] >= 12.0 or m_post[2] >= 9.0):
                             best_serve_k = k
+                            break
                 if best_serve_k > 0:
                     c = c[best_serve_k:]
 

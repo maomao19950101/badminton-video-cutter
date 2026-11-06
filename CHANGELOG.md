@@ -6,7 +6,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.7.0] - 2026-11-02 (Current Release)
+## [1.8.7] - 2026-11-05 (Current Release)
+
+### 🚫 Corridor Walk-Off & Intermission Pedestrian Suppression (镜头走廊过道走动强过滤)
+- **Walk-Off / Non-Play Pedestrian Rejection (`check_clip_is_real_play`)**:
+  - 精准识别局间换人、休息离场、镜头过道行人穿行等伪多拍场景（`b_avg >= 14.0`, `b_max_all >= 25.0` 且场内运动非爆发状态 `max_our < 30.0`），彻底杜绝因近处行人走过并伴随隔壁场地杀球声而被误判为多拍对攻的问题。
+  - 智能保留底线极限杀球/鱼跃救球逼近边界线（`max_our >= 30.0`）的真实高难度多拍回合。
+  - 新增专项单元测试 `test_walkoff_pedestrian_corridor_rejected`（51 项测试全部通过）。
+
+---
+
+## [1.8.6] - 2026-11-05
+
+### 🏸 Deep-Lob Cadence Protection & True Serve Temporal Guard (深挑高远球保全与真发球时序校验)
+- **Deep-Lob / High-Clear Protection (高远球与深挑球中盘物理保全)**:
+  - 解决了激烈长回合在中盘遭遇高远球/深挑球（击球间歇 1.6s~2.2s）被旧版算法误判死球提前腰斩的问题。
+  - 在 Rule 4 锚定逻辑中加入实战发球飞行时序窗口校验（`0.60s <= g_ret <= 2.60s`）与首个真发球命中即断（`break`），杜绝将回合内部连续对攻判定为新发球或割裂回合。
+- **100% Full Rally Ground Truth (实战多拍完整性修复)**:
+  - 成功修复第 05 局多拍 04 提前截断问题，无损重剪出完整的 18.2 秒超长高能拉锯，去除残尾碎片多拍 05，全局顺番重排并重建 14 拍连贯浓缩纯享合集。
+
+---
+
+## [1.8.5] - 2026-11-05
+
+### ⏱️ Rule 4: Pre-Serve Stationary Boundary & True Serve Anchoring (发球静止定界与真发球锚定)
+- **Zero Leading Footstep / Ball-Picking Noise (彻底剔除发球前捡球与踱步杂音)**:
+  - 严格依据世界羽联（BWF）第 9.1 条规则（发球与接发球员必须在发球区保持静止）。
+  - 在发球声学簇前评估局部光学运动平稳度（`our_m <= 7.5` 且 `near_m <= 7.0`），向前精确定位静止低谷之后的首记有效发球，将发球前捡球、走动、敲拍等死球杂音彻底剪除。
+
+---
+
+## [1.8.4] - 2026-11-04
+
+### 🎨 Pro NLE Studio UI & Anti-AI Pure Desktop Redesign (去 AI 化专业桌面剪辑台与双主题)
+- **Clean Native Pro NLE Aesthetic (专业非线性剪辑软件视觉质感)**:
+  - 彻底去除 AI 概念化设计与冗余视觉元素，采用 Final Cut Pro / DaVinci Resolve 风格的工业级时间轴与工具栏。
+  - 完整支持专业深色模式（Pro Dark）与录音室浅色模式（Studio Light）一键切换，配备实战赛点微调与双画面关键帧核对。
+
+---
+
+## [1.7.0] - 2026-11-02
 
 ### 🖥️ Major Feature: Pure Local Visual Desktop GUI & Interactive Timeline Studio (`badminton_gui.py` + `gui_engine.py`)
 - **100% Pure Local Visual Video Cutting Software (纯净本地可视化桌面软件)**:
