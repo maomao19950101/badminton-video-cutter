@@ -54,7 +54,6 @@ from modes_handler import (
     categorize_showcase_rallies,
     filter_solo_rallies,
     generate_condensed_reel,
-    generate_review_package,
     generate_vertical_clip,
 )
 
@@ -996,12 +995,6 @@ def export_video_timeline(
                 f"00_【个人高光Solo合集_{config.player}】_全{len(solo_clips)}段.mp4",
             )
             generate_condensed_reel(config.ffmpeg_bin, solo_clips, solo_reel)
-
-    if "review" in config.modes and enabled_rallies:
-        _prog(80.0, "正在导出【发接发前三拍切片】...")
-        _log("  🎓 正在导出【发接发前三拍 3.5秒切片】...")
-        rally_dicts = [seg.to_rally_dict() for seg in enabled_rallies]
-        generate_review_package(config.ffmpeg_bin, vpath, rally_dicts, match_dir)
 
     if "showcase" in config.modes and enabled_rallies:
         _prog(86.0, "正在分拣导出【球风分类视频库】...")

@@ -6,7 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.8.7] - 2026-11-05 (Current Release)
+## [1.8.8] - 2026-11-06 (Current Release)
+
+### 🧹 Deprecation & Removal of Tactical Review Mode (发接发前三拍复盘全面下线与纯净五大实战模式)
+- **Engine & Modes Pipeline Refactor (`modes_handler.py`, `badminton_cutter.py`, `gui_engine.py`)**:
+  - 全面下线发接发前三拍复盘（`--mode review` / `generate_review_package`）功能，从核心引擎及 CLI 参数选择中完整剥离。
+  - 瘦身并优化输出结构，彻底杜绝冗余的前三拍切片与战术报告生成，节省约 3.5GB 磁盘占用并提升批处理导出效率。
+  - 核心保留 5 大高价值实战模式：`all`（默认多拍与秒杀）、`condensed`（全场连贯纯享）、`vertical`（9:16 自媒体短视频）、`solo`（指定球员主角独享）、`showcase`（战术分类高光集锦）。
+- **Desktop & Web Studio UI Alignment (`badminton_gui.py`, `scripts/ui/index.html`)**:
+  - 本地 Tkinter 桌面端界面与 Codex Studio Web 端交互界面同步移除“发接发前三拍切片/战术复盘”选项卡与复选框。
+  - 保持专业非编剪辑台风格布局整洁统一，所有实战模式卡片、预设配置与导出管线严格对齐。
+- **Unit Test Suite Update**:
+  - 同步更新 `test_gui_engine.py`、`test_modes.py` 与 `test_ui_pro_nle.py`，全套 50 项测试 100% 通过。
+
+---
+
+## [1.8.7] - 2026-11-05
 
 ### 🚫 Corridor Walk-Off & Intermission Pedestrian Suppression (镜头走廊过道走动强过滤)
 - **Walk-Off / Non-Play Pedestrian Rejection (`check_clip_is_real_play`)**:

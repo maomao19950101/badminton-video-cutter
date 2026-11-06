@@ -52,9 +52,9 @@ class TestProNLEUI(unittest.TestCase):
             "Keep toggle button must have explicit Chinese label"
         )
 
-    def test_six_mode_cards_with_descriptions(self):
-        """Verifies all 6 video highlight modes are defined with clear Chinese descriptions."""
-        modes = ["按局", "纯享", "竖屏", "独享", "复盘", "高光"]
+    def test_five_mode_cards_with_descriptions(self):
+        """Verifies all 5 video highlight modes are defined with clear Chinese descriptions."""
+        modes = ["按局", "纯享", "竖屏", "独享", "高光"]
         for m in modes:
             self.assertIn(m, self.html, f"Mode descriptor for '{m}' must be present in UI")
 

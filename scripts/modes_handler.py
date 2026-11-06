@@ -5,7 +5,6 @@ Provides specialized video editing and analytical modes:
   - condensed: Seamless pure-play match condensation without ball-pickup downtime
   - vertical: 9:16 smart-cropped mobile vertical video for social media (Douyin/Reels/Xiaohongshu)
   - solo: Star player solo focus highlight extraction by court quadrant ReID
-  - review: Serve & return opening window extraction with tactical analytics report
   - showcase: Style-based highlight categorization (Smash, Marathon Rally, Fast Drive)
 """
 
@@ -131,80 +130,6 @@ def filter_solo_rallies(
         solo_rallies = [rallies[i] for i in range(0, len(rallies), 2)]
 
     return solo_rallies
-
-
-def generate_review_package(
-    ffmpeg_bin: str,
-    vpath: str,
-    rallies: List[Dict[str, Any]],
-    output_dir: str
-) -> Tuple[List[str], str]:
-    """
-    Generates tactical serve-and-return review clips (first 3.5s of each rally)
-    and compiles a comprehensive match analytics report.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-    sr_dir = os.path.join(output_dir, "发接发前三拍复盘")
-    os.makedirs(sr_dir, exist_ok=True)
-
-    cut_clips = []
-    durations = []
-    for i, r in enumerate(rallies, 1):
-        s_cut = r.get("s_cut", r.get("start_time", 0.0))
-        e_cut = r.get("e_cut", r.get("end_time", 0.0))
-        dur = e_cut - s_cut
-        durations.append(dur)
-
-        # First 3.5 seconds covers serve + return + 3rd stroke
-        sr_dur = min(3.5, max(1.5, dur))
-        sr_name = f"前三拍_{i:02d}_{int(s_cut//60):02d}分{int(s_cut%60):02d}秒_时长{sr_dur:.1f}秒.mp4"
-        sr_path = os.path.join(sr_dir, sr_name)
-
-        cmd = [
-            ffmpeg_bin, "-y",
-            "-ss", f"{s_cut:.3f}",
-            "-i", vpath,
-            "-t", f"{sr_dur:.3f}",
-            "-c", "copy",
-            sr_path
-        ]
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if os.path.exists(sr_path) and os.path.getsize(sr_path) > 0:
-            cut_clips.append(sr_path)
-
-    # Tactical Review Report
-    total_rallies = len(rallies)
-    avg_dur = sum(durations) / max(1, total_rallies)
-    max_dur = max(durations) if durations else 0.0
-    short_rallies = sum(1 for d in durations if d < 10.0)
-    med_rallies = sum(1 for d in durations if 10.0 <= d < 20.0)
-    long_rallies = sum(1 for d in durations if d >= 20.0)
-
-    report_lines = [
-        "=" * 60,
-        "🏸 羽毛球技战术与发接发专项复盘报告 (Tactical Review Report)",
-        "=" * 60,
-        f"源视频文件: {os.path.basename(vpath)}",
-        f"分析总回合: {total_rallies} 处",
-        f"平均回合时长: {avg_dur:.1f} 秒",
-        f"全场最长拉锯: {max_dur:.1f} 秒",
-        "-" * 60,
-        "📊 回合对抗节奏分布 (Rally Tempo Distribution):",
-        f"  - 快速突击/失误 ( < 10秒 ): {short_rallies} 回合 ({short_rallies/max(1, total_rallies)*100:.1f}%)",
-        f"  - 中度攻防相持 ( 10-20秒): {med_rallies} 回合 ({med_rallies/max(1, total_rallies)*100:.1f}%)",
-        f"  - 极限高能多拍 ( >= 20秒): {long_rallies} 回合 ({long_rallies/max(1, total_rallies)*100:.1f}%)",
-        "-" * 60,
-        "💡 技战术复盘建议:",
-        f"  1. 发接发前三拍片段已提取至: 发接发前三拍复盘/ (共 {len(cut_clips)} 段)",
-        "  2. 双打 70% 的主动权建立在接发扑推与第三拍抢网，建议着重回放前三拍接发质量与过网高度。",
-        "  3. 针对时长超过 20 秒的多拍回合，注意观察体能下降后的后场出球到位率与防守补位。",
-        "=" * 60,
-    ]
-    report_path = os.path.join(output_dir, "tactical_review_report.txt")
-    with open(report_path, "w", encoding="utf-8") as f_rep:
-        f_rep.write("\n".join(report_lines) + "\n")
-
-    return cut_clips, report_path
 
 
 def categorize_showcase_rallies(

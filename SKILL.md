@@ -1,12 +1,12 @@
 ---
 name: badminton-video-cutter
-version: 1.8.7
-description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), segmenting matches by player lineups/games (球员特征重识别与实战全自动球局分段), generating mobile 9:16 vertical shorts, pure-play condensed reels, player solo focus reels, tactical serve-return reviews, or launching the visual desktop GUI cutter.
+version: 1.8.8
+description: Use when processing, editing, and analyzing badminton match recordings, extracting intense multi-shot rallies (多拍集锦), identifying serve-and-kill moments (发球被一拍定死/接发秒杀), segmenting matches by player lineups/games (球员特征重识别与实战全自动球局分段), generating mobile 9:16 vertical shorts, pure-play condensed reels, player solo focus reels, or launching the visual desktop GUI cutter.
 ---
 
-# Badminton Match Auto-Cutter & Highlight Extractor (v1.8.7)
+# Badminton Match Auto-Cutter & Highlight Extractor (v1.8.8)
 
-> **Current Release**: `v1.8.7` (2026-11-05) · **Corridor Walk-Off Suppression, Deep-Lob Protection & Pro Studio NLE (过道走动强过滤·深挑高远球保全与纯净本地工作台)**  
+> **Current Release**: `v1.8.8` (2026-11-06) · **Tactical Review Deprecation & 5 Pure Streamlined Modes (发接发复盘下线与纯净五大实战模式)**  
 > **Changelog**: See [CHANGELOG.md](file:///Users/harry/.gemini/config/skills/badminton-video-cutter/CHANGELOG.md) for complete version history and evolution details.
 
 A comprehensive, production-grade skill for automating the detection, segmentation, extraction, and compilation of badminton match highlights using acoustic strike detection, optical motion analysis, visual dead-ball truncation, lossless stream cutting, and Olympic/BWF broadcast-grade tactical overlays.
@@ -59,14 +59,13 @@ A comprehensive, production-grade skill for automating the detection, segmentati
 >      1) *Long Intermission*: $\text{gap} \ge 45.0\text{s}$ (rest/water break between games, even when returning to court).
 >      2) *Lineup Substitution*: $\text{gap} \ge 22.0\text{s}$ AND bipartite similarity $< 0.65$ ($\ge 2$ players swapped off court).
 >    - **Directory Routing**: Partitions rallies into separate subdirectories (`第01局_实战对阵_XX拍/`, `第02局_实战对阵_XX拍/`, etc.) with renumbered clips (`多拍01 ~ 多拍XX`) and updated `game_summary.txt`. Supported CLI flags: `--split-by-game` (default), `--no-split-by-game`, `--lineup-threshold 0.65`, `--rest-gap 22.0`, `--long-intermission 45.0`, `--min-rallies-per-game 8`.
-> 10. **Multi-Mode Production Engine & Backward Compatibility (六大多样化实战模式规范 - v1.6.0)**:
->    - **Default Mode Invariance (默认行为 100% 保持现状)**: When `--mode` is omitted or set to `--mode all` (or `--mode highlight`), the tool behaves identically to standard v1.5.0, extracting clean multi-shot rallies + serve-kills with game partitioning and zero unwanted overhead.
+> 10. **Multi-Mode Production Engine & Backward Compatibility (五大多样化实战模式规范 - v1.8.8)**:
+>    - **Default Mode Invariance (默认行为 100% 保持现状)**: When `--mode` is omitted or set to `--mode all` (or `--mode highlight`), the tool behaves identically to standard, extracting clean multi-shot rallies + serve-kills with game partitioning and zero unwanted overhead.
 >    - **Specialized Workflows Supported**:
 >      1) `--mode condensed`: Strips dead-time and seamlessly concatenates all rallies into continuous match playback reels (`00_【第XX局_比赛浓缩纯享】_全XX段连贯版.mp4`) in $< 1\text{s}$ via lossless stream concat.
 >      2) `--mode vertical`: Smart mobile 9:16 vertical crop centered on court trapezoid (`--aspect-ratio 9:16`), saved into `竖屏9比16自媒体短视频/`.
 >      3) `--mode solo`: Focuses exclusively on the designated player (`--player [near_left|near_right|far_left|far_right]`) to extract personal highlight reels.
->      4) `--mode review`: Extracts serve & return opening windows (first 3.5s) into `发接发前三拍复盘/` and compiles a comprehensive `tactical_review_report.txt`.
->      5) `--mode showcase`: Categorizes rallies into tactical styles: `01_后场重杀突破`, `02_多拍高能拉锯`, `03_网前平抽快攻`.
+>      4) `--mode showcase`: Categorizes rallies into tactical styles: `01_后场重杀突破`, `02_多拍高能拉锯`, `03_网前平抽快攻`.
 
 ---
 
@@ -350,7 +349,8 @@ To eliminate the 20~30 minute processing bottleneck on large 4K HEVC match recor
 
 | 版本号 (Version) | 发布日期 (Date) | 核心算法演进 (Milestones) | 交付物规格 (Deliverables) |
 | :--- | :--- | :--- | :--- |
-| **`v1.3.8`** (最新) | 2026-10-28 | **攻防连续性保护与落地即止终结校准（Zero Premature Truncation & Landing Guarantee）**：<br>1. 攻防连续性保护准则（$S_i \to S_{i+1} \to S_{i+2}$ 连贯回合中高远球绝不空中腰斩）；<br>2. 0.85s 击球落地弧线全景保全（砸地触网即刻切断，零走动死球）；<br>3. 逆向末端捡球捞球清洗，根除递归误删尾部击球；<br>4. 实战镜头质检校准（$\ge 5$ 次实战击球自动保全）。 | 100% 完整多拍原画直出 + 0 提前腰斩 + Git 标签 `v1.3.8` |
+| **`v1.8.8`** (最新) | 2026-11-06 | **发接发复盘下线与纯净五大实战模式（Tactical Review Deprecation & 5 Streamlined Modes）**：<br>1. 全面移除发接发前三拍复盘功能，核心引擎与界面彻底剥离；<br>2. 释放约 3.5GB 磁盘占用，杜绝冗余碎片切片；<br>3. 桌面 GUI 与 Web Studio 同步对齐五大核心实战模式；<br>4. 50 项单元测试全部通过。 | 纯净五大模式 + 极速批处理 + Git 标签 `v1.8.8` |
+| **`v1.8.7`** | 2026-11-05 | **过道走动强过滤与深挑高远球保全**：<br>1. 过道行人与局间休息强过滤机制；<br>2. 高远球与深挑球中盘物理保全；<br>3. 51 项单元测试全绿。 | 零假对攻 + 完整多拍保全 + Git 标签 `v1.8.7` |
 | **`v1.3.7`** | 2026-10-27 | **超长多拍TOP大集锦可选化（Optional Reel Generation）**：<br>1. `--reel` 参数支持按需开启拼接（默认关闭，单场与跨场大合集彻底轻量化）；<br>2. 杜绝几十 GB 冗余文件重复写入，实战视频秒级切片直出；<br>3. 强化终端友好进度反馈。 | 独立高能切片秒级直出 + 可选大合集 + Git 标签 `v1.3.7` |
 | **`v1.3.6`** | 2026-10-27 | **双侧攻防核验与落地即止强截断**：<br>1. 同半场连续击球终结判定（跨网对攻连续性核验）；<br>2. 落地即止强切断机制（$t_{\text{last}} + 0.55\text{s}$ 彻底根除假拉锯粘连）；<br>3. 邻场外围走廊声学串扰压制。 | 零死球原画切片 + 微信表情包 GIF + Git 标签 `v1.3.6` |
 | **`v1.3.5`** | 2026-10-27 | **接发秒杀落地即止保全与后续击球排他机制**：<br>1. $t_k + 3.2\text{s}$ 内无击球严格排他性；<br>2. 截断延展至 $t_k + 1.25\text{s}$ 保全羽毛球落地与触网弹跳全轨迹。 | 真实接发秒杀切片 + 微信表情包 GIF + Git 标签 `v1.3.5` |

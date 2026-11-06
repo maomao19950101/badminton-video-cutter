@@ -10,7 +10,6 @@ from modes_handler import (
     categorize_showcase_rallies,
     generate_condensed_reel,
     generate_vertical_clip,
-    generate_review_package,
 )
 
 
@@ -57,29 +56,6 @@ class TestModesHandler(unittest.TestCase):
     def test_vertical_clip_missing_input(self):
         # Missing file should return False gracefully
         self.assertFalse(generate_vertical_clip("ffmpeg", "/nonexistent/in.mp4", "/tmp/out.mp4"))
-
-    def test_review_report_calculation(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            rallies = [
-                {"s_cut": 10.0, "e_cut": 18.0, "dur": 8.0},
-                {"s_cut": 30.0, "e_cut": 45.0, "dur": 15.0},
-                {"s_cut": 60.0, "e_cut": 85.0, "dur": 25.0},
-            ]
-            # Mock review report generation with dummy video
-            dummy_vid = os.path.join(tmp_dir, "dummy.mp4")
-            with open(dummy_vid, "w") as f:
-                f.write("dummy")
-
-            clips, report_path = generate_review_package(
-                "echo", dummy_vid, rallies, tmp_dir
-            )
-            self.assertTrue(os.path.exists(report_path))
-            with open(report_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                self.assertIn("羽毛球技战术与发接发专项复盘报告", content)
-                self.assertIn("分析总回合: 3 处", content)
-                self.assertIn("平均回合时长: 16.0 秒", content)
-                self.assertIn("全场最长拉锯: 25.0 秒", content)
 
 
 if __name__ == "__main__":

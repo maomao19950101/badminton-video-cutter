@@ -329,12 +329,11 @@ class BadmintonCutterGUI:
             default_out = "/Users/harry/视频/1029羽毛球精彩多拍集锦"
         self.output_dir_var = tk.StringVar(value=default_out)
 
-        # Six cutting modes (Mode 0 checked by default)
+        # Five cutting modes (Mode 0 checked by default)
         self.mode_all_var = tk.BooleanVar(value=True)
         self.mode_condensed_var = tk.BooleanVar(value=False)
         self.mode_vertical_var = tk.BooleanVar(value=False)
         self.mode_solo_var = tk.BooleanVar(value=False)
-        self.mode_review_var = tk.BooleanVar(value=False)
         self.mode_showcase_var = tk.BooleanVar(value=False)
 
         self.aspect_ratio_var = tk.StringVar(value="9:16")
@@ -755,12 +754,6 @@ class BadmintonCutterGUI:
 
         ttk.Checkbutton(
             sec2,
-            text="发接发前三拍切片（专门截取开球前 3.5 秒片段）",
-            variable=self.mode_review_var,
-        ).pack(anchor=tk.W, pady=2)
-
-        ttk.Checkbutton(
-            sec2,
             text="球风分类视频库（重杀突破 / 多拍拉锯 / 平抽快攻）",
             variable=self.mode_showcase_var,
         ).pack(anchor=tk.W, pady=2)
@@ -1095,7 +1088,6 @@ class BadmintonCutterGUI:
         self.mode_condensed_var.set(preset_name in ("condensed", "grand_slam"))
         self.mode_vertical_var.set(preset_name in ("vertical", "grand_slam"))
         self.mode_solo_var.set(preset_name == "grand_slam")
-        self.mode_review_var.set(preset_name == "grand_slam")
         self.mode_showcase_var.set(preset_name == "grand_slam")
         self.split_by_game_var.set(True)
         self.append_log(f"✨ 已切换场景预设: [{preset_name}]")
@@ -1110,8 +1102,6 @@ class BadmintonCutterGUI:
             modes.append("vertical")
         if self.mode_solo_var.get():
             modes.append("solo")
-        if self.mode_review_var.get():
-            modes.append("review")
         if self.mode_showcase_var.get():
             modes.append("showcase")
         if not modes:
@@ -1142,7 +1132,6 @@ class BadmintonCutterGUI:
         self.mode_condensed_var.set(False)
         self.mode_vertical_var.set(False)
         self.mode_solo_var.set(False)
-        self.mode_review_var.set(False)
         self.mode_showcase_var.set(False)
         self.split_by_game_var.set(True)
         self.reel_var.set(False)

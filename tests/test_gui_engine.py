@@ -149,16 +149,8 @@ class TestGuiEngine(unittest.TestCase):
                     f.write(b"fake_vert_bytes")
                 return clip_out
 
-            def fake_review(ffmpeg_bin, vpath, rallies, match_dir):
-                rev_dir = os.path.join(match_dir, "技战术与发接发复盘")
-                os.makedirs(rev_dir, exist_ok=True)
-                rep = os.path.join(rev_dir, "tactical_review_report.txt")
-                with open(rep, "w") as f:
-                    f.write("report")
-                return [], rep
-
             config = CutterConfig(
-                modes=["all", "condensed", "vertical", "solo", "review", "showcase"],
+                modes=["all", "condensed", "vertical", "solo", "showcase"],
                 player="near_left",
                 split_by_game=True,
                 reel=True,
@@ -167,8 +159,7 @@ class TestGuiEngine(unittest.TestCase):
             with patch("gui_engine.cut_lossless", side_effect=fake_cut), \
                  patch("gui_engine.concat_clips", side_effect=fake_condensed), \
                  patch("gui_engine.generate_condensed_reel", side_effect=fake_condensed), \
-                 patch("gui_engine.generate_vertical_clip", side_effect=fake_vertical), \
-                 patch("gui_engine.generate_review_package", side_effect=fake_review):
+                 patch("gui_engine.generate_vertical_clip", side_effect=fake_vertical):
                 res = export_batch_timelines([self.timeline], tmpdir, config=config)
 
             self.assertEqual(len(res["matches"]), 1)

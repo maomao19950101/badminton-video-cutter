@@ -39,11 +39,10 @@ from modes_handler import (
     generate_condensed_reel,
     generate_vertical_clip,
     filter_solo_rallies,
-    generate_review_package,
     categorize_showcase_rallies,
 )
 
-__version__ = "1.8.4"
+__version__ = "1.8.8"
 
 
 def resolve_ffmpeg_bin():
@@ -937,9 +936,9 @@ def main():
     parser.add_argument("--output", "-o", required=True, help="Output root directory")
     parser.add_argument(
         "--mode",
-        choices=["all", "highlight", "duopai", "serve_kill", "condensed", "vertical", "solo", "review", "showcase"],
+        choices=["all", "highlight", "duopai", "serve_kill", "condensed", "vertical", "solo", "showcase"],
         default="all",
-        help="Extraction mode: all/highlight (默认多拍+秒杀), condensed (比赛浓缩纯享), vertical (9:16竖屏短视频), solo (个人主角光环), review (发接发与技战术复盘), showcase (战术风格分类集锦)"
+        help="Extraction mode: all/highlight (默认多拍+秒杀), condensed (比赛浓缩纯享), vertical (9:16竖屏短视频), solo (个人主角光环), showcase (战术风格分类集锦)"
     )
     parser.add_argument("--player", choices=["near_left", "near_right", "far_left", "far_right", "auto"], default="near_left", help="Target player quadrant for --mode solo (default: near_left)")
     parser.add_argument("--aspect-ratio", choices=["9:16", "1:1", "16:9"], default="9:16", help="Target aspect ratio for --mode vertical (default: 9:16)")
@@ -1035,7 +1034,7 @@ def main():
             filtered_out = raw_peak_count - len(peaks)
             print(f"  📷 机位实战时间窗: {stable_start:.1f}s ~ {unstable_end:.1f}s (排除开机固定/散场关机杂音 {filtered_out} 处，保留实战击球 {len(peaks)} 次)")
 
-            if args.mode in ["all", "highlight", "duopai", "condensed", "vertical", "solo", "review", "showcase"]:
+            if args.mode in ["all", "highlight", "duopai", "condensed", "vertical", "solo", "showcase"]:
                 rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=args.min_hits, cap=cap, fps=fps, vpath=vpath)
                 print(f"  🏸 Found {len(rallies)} raw candidate rallies")
 
@@ -1258,11 +1257,6 @@ def main():
                         v_out = os.path.join(vert_dir, v_name)
                         generate_vertical_clip(args.ffmpeg, c_path, v_out, aspect_ratio=args.aspect_ratio)
                     print(f"    📱 Saved vertical clips to: {vert_dir}")
-
-                elif args.mode == "review":
-                    print(f"  🎓 [技战术复盘模式] Generating tactical & serve-return review package...")
-                    rev_clips, rev_report = generate_review_package(args.ffmpeg, vpath, valid_rallies, match_dir)
-                    print(f"    📝 Tactical Review Report saved to: {rev_report}")
 
                 elif args.mode == "showcase":
                     showcase_dir = os.path.join(match_dir, "战术风格分类集锦")
