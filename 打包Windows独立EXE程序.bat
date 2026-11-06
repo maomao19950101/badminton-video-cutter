@@ -7,9 +7,13 @@ echo ============================================================
 echo   📦 正在打包【羽毛球比赛剪辑工作室.exe】独立 Windows 桌面程序...
 echo ============================================================
 
-python -m pip install pyinstaller numpy opencv-python -i https://pypi.tuna.tsinghua.edu.cn/simple
+python -m pip install pyinstaller -r requirements.txt
+if errorlevel 1 (
+    pause
+    exit /b 1
+)
 
-pyinstaller --noconfirm --clean --windowed ^
+python -m PyInstaller --noconfirm --clean --windowed ^
     --name "羽毛球比赛剪辑工作室" ^
     --icon "%~dp0assets\app_icon.ico" ^
     --paths "%~dp0scripts" ^
@@ -20,6 +24,10 @@ pyinstaller --noconfirm --clean --windowed ^
     --hidden-import "modes_handler" ^
     --hidden-import "gui_engine" ^
     "%~dp0scripts\codex_server.py"
+if errorlevel 1 (
+    pause
+    exit /b 1
+)
 
 if exist "%~dp0bin\ffmpeg.exe" (
     mkdir "%~dp0dist\羽毛球比赛剪辑工作室\bin" 2>nul

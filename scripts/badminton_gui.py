@@ -23,7 +23,7 @@ import time
 os.environ["TK_SILENCE_DEPRECATION"] = "1"
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -117,7 +117,7 @@ PLAYER_LABELS = {
     "近端右半场 (near_right)": "near_right",
     "远端左半场 (far_left)": "far_left",
     "远端右半场 (far_right)": "far_right",
-    "全自动识别焦点 (auto)": "auto",
+    "全部已标注回合 (auto)": "auto",
 }
 
 PREFS_PATH = os.path.join(tempfile.gettempdir(), "badminton_gui_preferences.json")
@@ -320,13 +320,10 @@ class BadmintonCutterGUI:
         self._build_layout()
         self._bind_shortcuts()
         self.apply_theme(self.theme_mode)
-        self._auto_load_default_match_folder()
         self._poll_ui_queue()
 
     def _init_vars(self):
         default_out = os.path.join(os.path.expanduser("~"), "Desktop", "羽毛球AI剪辑输出")
-        if os.path.exists("/Users/harry/视频/1029羽毛球精彩多拍集锦"):
-            default_out = "/Users/harry/视频/1029羽毛球精彩多拍集锦"
         self.output_dir_var = tk.StringVar(value=default_out)
 
         # Five cutting modes (Mode 0 checked by default)
@@ -336,6 +333,7 @@ class BadmintonCutterGUI:
         self.mode_solo_var = tk.BooleanVar(value=False)
         self.mode_showcase_var = tk.BooleanVar(value=False)
 
+        self.exact_var = tk.BooleanVar(value=False)
         self.aspect_ratio_var = tk.StringVar(value="9:16")
         self.solo_player_var = tk.StringVar(value="近端左半场 (near_left)")
 
@@ -401,11 +399,6 @@ class BadmintonCutterGUI:
         self.root.bind("<Command-s>", lambda e: self.save_current_timeline_manual())
         self.root.bind("<Control-t>", lambda e: self.toggle_theme())
         self.root.bind("<Command-t>", lambda e: self.toggle_theme())
-
-    def _auto_load_default_match_folder(self):
-        default_in = "/Users/harry/视频/1029"
-        if os.path.isdir(default_in) and not self.video_files:
-            self._import_folder_path(default_in, silent=True)
 
     # -------------------------------------------------------------------------
     # Theme Registration & Dynamic Dark/Light Switching
@@ -619,7 +612,7 @@ class BadmintonCutterGUI:
             hdr_right, "抖音 9:16 竖屏", lambda: self.apply_preset("vertical"), variant="ghost", bg_key="bg_header", font_size=8, padx=8, pady=4
         ).pack(side=tk.RIGHT, padx=2)
         self._make_btn(
-            hdr_right, "纯享紧凑长片", lambda: self.apply_preset("condensed"), variant="ghost", bg_key="bg_header", font_size=8, padx=8, pady=4
+            hdr_right, "多拍纯享", lambda: self.apply_preset("condensed"), variant="ghost", bg_key="bg_header", font_size=8, padx=8, pady=4
         ).pack(side=tk.RIGHT, padx=2)
         self._make_btn(
             hdr_right, "默认球局多拍", lambda: self.apply_preset("default"), variant="ghost", bg_key="bg_header", font_size=8, padx=8, pady=4
@@ -718,7 +711,7 @@ class BadmintonCutterGUI:
 
         ttk.Checkbutton(
             sec2,
-            text="一刀不剪·纯享紧凑版（剔除捡球走动，合成连贯长片）",
+            text="多拍纯享（拼接符合拍数和时长门槛的回合）",
             variable=self.mode_condensed_var,
         ).pack(anchor=tk.W, pady=2)
 
@@ -726,7 +719,7 @@ class BadmintonCutterGUI:
         vert_row.pack(fill=tk.X, pady=2)
         ttk.Checkbutton(
             vert_row,
-            text="竖屏短视频模式（自动焦点平滑居中） 比例:",
+            text="短视频居中裁剪  比例:",
             variable=self.mode_vertical_var,
         ).pack(side=tk.LEFT)
         ttk.Combobox(
@@ -741,7 +734,7 @@ class BadmintonCutterGUI:
         solo_row.pack(fill=tk.X, pady=2)
         ttk.Checkbutton(
             solo_row,
-            text="个人高光 Solo 视角   站位:",
+            text="个人高光（按标注筛选）  站位:",
             variable=self.mode_solo_var,
         ).pack(side=tk.LEFT)
         ttk.Combobox(
@@ -754,7 +747,7 @@ class BadmintonCutterGUI:
 
         ttk.Checkbutton(
             sec2,
-            text="球风分类视频库（重杀突破 / 多拍拉锯 / 平抽快攻）",
+            text="分类高光（长回合与打法标注）",
             variable=self.mode_showcase_var,
         ).pack(anchor=tk.W, pady=2)
 
@@ -789,6 +782,9 @@ class BadmintonCutterGUI:
             command=lambda: self.gif_var.set(self.slowmo_var.get()),
         ).grid(row=1, column=1, sticky=tk.W, pady=1)
 
+        ttk.Checkbutton(opt_grid, text="帧级精剪（重新编码）", variable=self.exact_var).grid(
+            row=2, column=0, sticky=tk.W, padx=(0, 8), pady=1
+        )
         self._add_slider(sec3, "多拍最少击球数 (拍)", self.min_hits_var, 3, 15, is_int=True)
         self._add_slider(sec3, "多拍最短保留秒数 (s)", self.min_dur_var, 3.0, 15.0, is_int=False)
         self._add_slider(sec3, "换人分局休息间隔 (s)", self.rest_gap_var, 10.0, 60.0, is_int=False)
@@ -1018,6 +1014,9 @@ class BadmintonCutterGUI:
             tbl_bar, "拆分为新一局", self.split_selected_game, variant="secondary", bg_key="bg_panel", font_size=8, padx=8, pady=3
         ).pack(side=tk.RIGHT, padx=2)
         self._make_btn(
+            tbl_bar, "标注回合", self.mark_selected_rally, variant="secondary", bg_key="bg_panel", font_size=8, padx=8, pady=3
+        ).pack(side=tk.RIGHT, padx=2)
+        self._make_btn(
             tbl_bar, "保留/剔除 (Del)", self.toggle_selected_rally, variant="secondary", bg_key="bg_panel", font_size=8, padx=8, pady=3
         ).pack(side=tk.RIGHT, padx=2)
 
@@ -1119,6 +1118,7 @@ class BadmintonCutterGUI:
             hud=self.hud_var.get(),
             slowmo=self.slowmo_var.get(),
             gif=self.gif_var.get(),
+            exact=self.exact_var.get(),
             strict_visual=True,
             min_hits=int(self.min_hits_var.get()),
             min_duration=float(self.min_dur_var.get()),
@@ -1138,6 +1138,7 @@ class BadmintonCutterGUI:
         self.hud_var.set(False)
         self.slowmo_var.set(False)
         self.gif_var.set(False)
+        self.exact_var.set(False)
         self.min_hits_var.set(5)
         self.min_dur_var.set(5.0)
         self.rest_gap_var.set(22.0)
@@ -1148,7 +1149,7 @@ class BadmintonCutterGUI:
         if not full_p or full_p in self.video_files:
             return False
         self.video_files.append(full_p)
-        cached_tl = try_load_cached_timeline(full_p)
+        cached_tl = try_load_cached_timeline(full_p, self.build_cutter_config())
         if cached_tl and cached_tl.segments:
             self.timelines[full_p] = cached_tl
         return True
@@ -1607,6 +1608,26 @@ class BadmintonCutterGUI:
                 f"✂️ 已微调回合 #{seg.uid:02d}: 新区间 {format_time_zh(seg.s_cut)} ~ {format_time_zh(seg.e_cut)} ({seg.dur:.1f}s)"
             )
 
+    def mark_selected_rally(self):
+        tl = self.timelines.get(self.current_vpath)
+        seg = tl.get_segment(self.selected_uid) if tl and self.selected_uid is not None else None
+        if not seg or seg.kind != "rally":
+            return
+        initial = "" if seg.lead_quadrant is None else str(seg.lead_quadrant)
+        lead = simpledialog.askstring("主角站位", "0 近左、1 近右、2 远左、3 远右，留空清除。", initialvalue=initial)
+        if lead is None:
+            return
+        style = simpledialog.askstring("回合打法", "smash 重杀、drive 平抽快攻，留空清除。", initialvalue=seg.stroke_style)
+        if style is None:
+            return
+        if lead not in ("", "0", "1", "2", "3") or style not in ("", "smash", "drive"):
+            messagebox.showwarning("标注值无效", "请使用提示中的站位编号和打法。")
+            return
+        seg.lead_quadrant = int(lead) if lead else None
+        seg.stroke_style = style
+        save_timeline_json(tl)
+        self.append_log(f"已保存回合 #{seg.uid:02d} 的站位和打法标注。")
+
     def toggle_selected_rally(self):
         tl = self.timelines.get(self.current_vpath) if self.current_vpath else None
         if not tl or self.selected_uid is None:
@@ -1717,7 +1738,8 @@ class BadmintonCutterGUI:
                         log_cb=lambda m: self.ui_queue.put(("log", m)),
                         cancel_check=lambda: self.cancel_requested,
                     )
-                    self.ui_queue.put(("done_popup", out_root))
+                    if not self.cancel_requested:
+                        self.ui_queue.put(("done_popup", out_root))
             except Exception as e:
                 self.ui_queue.put(("log", f"❌ 处理异常: {e}"))
             finally:
@@ -1755,6 +1777,8 @@ class BadmintonCutterGUI:
                     )
                     self.timelines[vpath] = tl
                     self.ui_queue.put(("timeline_ready", vpath))
+            except Exception as e:
+                self.ui_queue.put(("log", f"❌ 扫描失败: {e}"))
             finally:
                 self.ui_queue.put(("running", False))
 
@@ -1785,6 +1809,8 @@ class BadmintonCutterGUI:
                 )
                 if not self.cancel_requested:
                     self.ui_queue.put(("done_popup", out_root))
+            except Exception as e:
+                self.ui_queue.put(("log", f"❌ 导出失败: {e}"))
             finally:
                 self.ui_queue.put(("running", False))
 

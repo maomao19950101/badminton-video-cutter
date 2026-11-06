@@ -1,189 +1,55 @@
-# 🏸 Badminton Video Cutter (羽毛球实战视频智能精彩剪辑器)
+# 羽毛球比赛视频剪辑工作室
 
-<p align="center">
-  <img src="https://img.shields.io/badge/version-v1.4.0-blue.svg?style=flat-square" alt="Version">
-  <img src="https://img.shields.io/badge/python-3.10+-brightgreen.svg?style=flat-square" alt="Python">
-  <img src="https://img.shields.io/badge/ffmpeg-4K_UHD_StreamCopy-orange.svg?style=flat-square" alt="FFmpeg">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License">
-</p>
+将固定底线机位录制的羽毛球比赛转成回合时间轴和视频片段。使用现场音轨定位候选击球，再结合球场画面的运动变化估算回合边界。优先使用场地完整、机位稳定、主场地居中且击球声清楚的素材。邻场响声、遮挡和大幅晃动可能影响结果。
 
-专为羽毛球业余/专业球友、俱乐部教练、视频创作者打造的**全自动化实战视频精彩高光提取与智能剪辑引擎**。基于**声光多模态击球感知（Acoustic-Optical Multimodal Perception）**、**物理运动学空间约束**与**轻量级球员外貌 ReID 阵容匹配**，从数小时的 4K 60fps 原盘录像中毫秒级定位精彩回合，自动按“对阵阵容”切分球局，自动剔除捡球、走动、喝水等无效垃圾死球时间，无损直出转播级多拍集锦、分局精选、接发秒杀大赏、慢动作回放与微信动态表情包！
+## 安装与启动
 
----
+需要 Python 3.10+、FFmpeg、NumPy 和 OpenCV。安装 FFmpeg 后将它加入 PATH，或者设置 `BADMINTON_FFMPEG` 指向可执行文件。CLI 也支持 `--ffmpeg`。帧级精剪与比例裁剪需要 FFmpeg 支持 `libx264`，HUD 需要 ASS 字幕滤镜和可用字体。
 
-## 🌟 核心功能亮点 (Key Features)
-
-- 🏆 **全自动球局分段与球员重识别 (Automated Match Segmentation - v1.4.0)**
-  - **免底库开箱即用**：无需事先录入人脸或照片，算法在每个多拍发球前静态瞬间（$-0.5\text{s}$）极速抽帧，提取球员 512 维空间外观指纹。
-  - **二分图匈牙利最佳匹配**：不受双打换位、左右半区对调或局间前后场换边影响，准确识别场上人员阵容。
-  - **分局目录结构化输出**：自动划分 `第01局_实战对阵_15拍/`、`第02局_实战对阵_18拍/` 并输出详尽的 `game_summary.txt` 战报；支持 `--split-by-game`（默认开启）与 `--no-split-by-game`。
-- 🏸 **纯多拍对攻拉锯集锦 (Multi-Shot Rallies)**
-  - 自动识别激烈回合对攻，智能区分 5~15 秒【多拍激烈对攻】与 15 秒以上【超长高能拉锯】。
-  - 单独输出独立精彩小视频，告别几十 GB 冗余占用，随时分享。
-- 🛡️ **攻防连续性保护与零提前截断 (Zero Premature Truncation - v1.3.8)**
-  - 建立**多拍连续对攻链条保护机制**：对攻连贯回合内（$S_i \to S_{i+1} \to S_{i+2}$）坚决杜绝因高远球高飞选手短暂蓄势导致的“空中腰斩”，全量保全每一次击球对决！
-  - **完整落地弧线保全（0.85s）**：剪辑终结点严格延展至最后一拍后 0.85 秒（暴杀 0.65 秒），完整展现羽毛球下坠砸地、触网反弹与得分终结全轨迹，并在捡球走动开始前毫秒级斩断。
-- 🎞️ **可选生成巅峰大合集 (Optional Reel Generation - v1.3.7)**
-  - 默认极速直出独立高能切片，**无多余磁盘 I/O 损耗**；如需长视频，仅需添加 `--reel` 即可一键拼接单场及跨场全巅峰合集（`00_【纯多拍零死球合集】_全N段精选版.mp4` / `00_【全场巅峰超长多拍TOP大集锦】...`）。
-- ⚡ **接发突击一拍定死大赏 (Serve-and-Kill Moments)**
-  - 毫秒级捕捉发球被直接扑死（【发球被一拍定死】）与接发直接变线抽杀（【接发突击一拍定死】）。
-  - **v1.3.5 落地保全与后续击球排他机制**：严格验证 $t_k + 3.2\text{s}$ 内无后续击球（排他性），并延展 $e_{\text{cut}} = t_k + 1.25\text{s}$ 完整记录羽毛球下坠砸地、触网反弹与死球全轨迹。
-- 🛑 **落地即止与双侧攻防核验 (Ground-Landing Severing - v1.3.6)**
-  - **同半场连续击球终结判定**：根据羽毛球跨网对攻规则，当一侧击球后对方半场处于休眠状态（`far_m < 5.2`）或球场进入走动捡球（`our_m < 8.8`），判定结分，球落地即刻切断，**彻底杜绝外场暴杀声混入、捡球走动粘连等假拉锯**。
-- 🚫 **人员进出场与换人离场智能过滤**
-  - 四锚点时序核验（20%, 40%, 60%, 80%），自动识别并剔除人员进出场、下场喝水、半场轮换等非实战镜头。
-- 📹 **开机关机调试噪点智能排查 (Camera Match Window)**
-  - 自动分析机位抖动，秒级锁定固定机位有效比赛时间窗（`stable_start ~ unstable_end`），彻底排除开机安装固定与关机收拾过程中的杂音。
-- 📊 **转播级 HUD 焦点战术覆叠 (Broadcast Tactical HUD)**
-  - 支持渲染奥运/世锦赛转播级 HUD：多拍拍数计数器（Rally Shots）、对攻持续时长（Duration）、高频攻防瞬时拍速（RPS, Hits/sec）与能量波形。
-- 🎞️ **微信动态表情包自动制作 (WeChat GIF Stickers)**
-  - 针对绝妙秒杀与高光绝杀，自动生成带有金色战术标语的 480P 12fps 微信表情包，大小控制在 1MB~5MB，即存即发！
-- ⚡ **全流程 4K 极速无损流复制 (Lossless Stream Copy)**
-  - 剪辑默认采用 `-c copy` 无损流切分，纯 4K 60fps UHD 画质原汁原味，处理耗时仅为传统重编码的 1/200！
-
----
-
-## 🏗️ 算法架构与技术管线 (Architecture Pipeline)
-
-```
-                       [ 原始录像 4K 60fps MP4 ]
-                                  │
-         ┌────────────────────────┴────────────────────────┐
-         ▼                                                 ▼
-[ 提取单声道 WAV (16kHz) ]                       [ 视频帧多模态透视流 ]
-         │                                                 │
-[ 短时高通瞬态能量激增检测 ]                                 │
-    (Dual-Contrast Acoustic)                               │
-         │                                                 │
-[ 击球候选点时间序列 t_hits ]                                │
-         │                                                 │
-         └────────────────────────┬────────────────────────┘
-                                  ▼
-               [ 机位实战时间窗校准 fast_camera_match_window ]
-                                  │
-               [ 邻场声学串扰抑制 & 走动捡球过滤 (v1.3.6) ]
-                                  │
-         ┌────────────────────────┴────────────────────────┐
-         ▼                                                 ▼
-[ 多拍聚类与双侧连续性核验 ]                     [ 接发秒杀多模态验证 ]
-  - max_gap = 2.40s 物理上限                       - 严格发接发时序 (0.45s~1.70s)
-  - 走动与捡球间歇强解耦                             - 后续击球排他窗口 [tk+0.25, tk+3.20]
-  - 捞球连击消除 (Multi-Tap Prune)                  - 发球前蓄势静音核验
-         │                                                 │
-[ 落地即止强切断 (落地+0.50s) ]                   [ 落地轨迹保全 (tk+1.25s) ]
-         │                                                 │
-         └────────────────────────┬────────────────────────┘
-                                  ▼
-                     [ 多线程无损流复制 ffmpeg -c copy ]
-                                  │
-         ┌────────────────────────┼────────────────────────┐
-         ▼                        ▼                        ▼
-[ 独立精彩多拍集锦 ]        [ 接发秒杀一拍定死 ]       [ 纯多拍零死球整场大合集 ]
-(5~15s激烈 / >15s超长)    (发球被定死 / 接发突击)        (00_纯多拍合集.mp4)
-```
-
----
-
-## 📋 羽毛球精彩集锦八大执行铁律 (The 8 Mandatory Rules)
-
-1. **绝对零死球截断规范与球落地即止原则**：片头紧随发球引拍（$t_{\text{serve}} - 0.70\text{s}$），片尾严格终结于羽毛球触地/挂网瞬间（$t_{\text{last}} + 0.50\text{s}$），严禁包含球员捡球、擦汗、发呆。
-2. **绝对严禁未死球提前截断**：长达 2.40 秒的底线高远球空中航迹必须 100% 完整保留，不漏球、不切碎。
-3. **机位调试与非比赛镜头 100% 排除**：开机关机、拿在手上调整机位等非打球片段坚决剔除。
-4. **人员进出场与换人离场严格过滤**：严禁替补进出、喝水走动等镜头进入集锦。
-5. **默认纯净原画无遮挡直出**：视频默认不压印任何字幕或贴纸，保持场地、球路视线清晰。
-6. **双轨分类存储架构**：多拍拉锯与接发秒杀分门别类，绝不混淆。
-7. **整场无损缝合大合集**：全场精彩无缝拼接，零死球连贯播放。
-8. **微信动态表情包即发规格**：专为移动端社交传播设计的微型动图。
-
----
-
-## 🚀 快速上手 (Quickstart)
-
-### 1. 环境准备 (Requirements)
-
-- **Python**: 3.10+ (推荐使用 [uv](https://github.com/astral-sh/uv) 极速管理环境)
-- **FFmpeg**: 需支持 HEVC/H.264 解码与无损封装
-- **Python 依赖**: `opencv-python-headless`, `numpy`, `scipy`
+在解包目录执行以下命令。推荐在虚拟环境安装依赖，也可用 uv 运行。
 
 ```bash
-# 使用 uv 运行（无需繁琐配置虚拟环境）
-uv run --with opencv-python-headless --with numpy --with scipy python scripts/badminton_cutter.py --help
+python -m pip install -r requirements.txt
+python scripts/badminton_cutter.py --help
+python scripts/codex_server.py
 ```
-
-### 2. 命令行基础用法 (Basic Usage)
 
 ```bash
-# 1. 极速提取所有精彩切片（默认模式，跳过生成几十 GB 的大合集视频，极速省空间）
-python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode all
-
-# 2. 提取高光切片并一键缝合整场及跨场巅峰超长大合集（添加 --reel）
-python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode all --reel
-
-# 3. 仅提取纯多拍拉锯对攻片段
-python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode duopai
-
-# 4. 仅提取接发秒杀一拍定死高光时刻与微信表情包
-python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode serve_kill --gif
-
-# 5. 生成带转播级 HUD 毫秒跑表与击球数特效的精选片段
-python scripts/badminton_cutter.py --input /path/to/videos --output /path/to/highlights --mode all --hud
+uv run --python 3.12 --with-requirements requirements.txt python scripts/badminton_cutter.py --help
 ```
 
----
+macOS 可双击 `启动可视化剪辑软件_Mac.command`。Windows 可运行同包的 Windows 启动器。Web 工作台监听本机回环地址，首次启动会打开工作台窗口或浏览器。Tkinter 工作台也可用 `python scripts/badminton_gui.py` 启动，需要当前 Python 安装了 Tk。
 
-## 📂 输出目录组织结构 (Output Directory Structure)
-
-剪辑完成后，将自动在指定输出目录下按场次规范分类：
-
-```text
-📁 1026羽毛球精彩多拍集锦/
-├── 📁 01_场次一_双打实战_049/
-│   ├── 🎬 00_【01_场次一_纯多拍零死球合集】_全38段精选版.mp4  <-- 全场精选大合集
-│   ├── 🎬 多拍01_02分15秒至02分28秒_【多拍激烈对攻】_13秒.mp4
-│   ├── 🎬 多拍02_04分10秒至04分32秒_【超长高能拉锯】_22秒.mp4
-│   ├── 📁 接发秒杀一拍定死/
-│   │   ├── 🎬 秒杀01_01分44秒至01分49秒_【接发突击一拍定死】_5秒.mp4
-│   │   └── 🎬 秒杀02_08分12秒至08分16秒_【发球被一拍定死】_4秒.mp4
-│   ├── 📁 转播级HUD特效/
-│   │   └── 🎬 HUD_多拍02_04分10秒至04分32秒_【超长高能拉锯】_22秒.mp4
-│   └── 📁 微信动态表情包/
-│       └── 🖼️ 表情包_秒杀01_接发突击一拍定死.gif
-└── 📁 02_场次二_双打实战_050/
-    └── ...
-```
-
----
-
-## 🏷️ 版本历史 (Release History)
-
-查看完整的版本迭代记录：[CHANGELOG.md](CHANGELOG.md)
-
-- **v1.4.0 (2026-10-30)**：全自动球局分段与球员 ReID 重识别，基于发球准备帧 512 维空间特征与二分图最佳匹配，结构化输出 `第01局/`、`第02局/` 及比赛报告 `game_summary.txt`。
-- **v1.3.8 (2026-10-28)**：攻防连续性保护与零提前截断终结保证，0.85s 击球落地弧线全景保全，逆向末端捡球捞球清洗。
-- **v1.3.7 (2026-10-27)**：超长多拍 TOP 大集锦可选化（`--reel`），极速轻量化输出与磁盘冗余清零。
-- **v1.3.6 (2026-10-27)**：同半场连续击球终结判定与双侧攻防核验，落地即止强切断机制，彻底根除捡球走动与相邻场地杀球声串扰粘连。
-- **v1.3.5 (2026-10-27)**：接发秒杀落地即止保全（$t_k+1.25\text{s}$），后续击球严格排他窗口（3.2秒静默），发球前蓄势静音核验。
-- **v1.3.4 (2026-10-26)**：中途死球动量骤降解耦与静止场区声学串扰清洗。
-- **v1.3.3 (2026-10-26)**：双重声学标定与多点航迹高远球保全。
-- **v1.3.0 ~ v1.3.2 (2026-10-26)**：零死球解耦引擎、人员进出场过滤与轻吊搓放捕捉。
-
----
-
-## 🤝 贡献与持续更新 (Continuous Delivery & Contribution)
-
-本项目持续维护，针对各类场馆声学环境（吸音馆、铁皮馆、高挑空大馆）、多机位角度（后场高机位、侧面网口、低三脚架）以及双打/单打场景持续优化模型参数。
-
-欢迎提交 Issue 和 Pull Request！
+## 使用方式
 
 ```bash
-# 提交并推送至 GitHub
-git add .
-git commit -m "feat: your new feature"
-git push origin main --tags
+# 默认输出独立多拍与接发秒杀候选片段
+python scripts/badminton_cutter.py -i "比赛目录" -o "剪辑输出"
+
+# 先生成时间轴，批量确认前不写视频
+python scripts/badminton_cutter.py -i "比赛.mp4" -o "剪辑输出" --analyze-only
+
+# 复用已审核的时间轴，帧级精剪并输出比例转换视频
+python scripts/badminton_cutter.py -i "比赛.mp4" -o "精剪输出" \
+  --timeline "剪辑输出/场次目录/match_timeline.json" --mode vertical --aspect-ratio 9:16 --exact
 ```
 
----
+- `all`（兼容别名 `highlight`）是默认模式。只要多拍或接发秒杀候选时用 `duopai` 或 `serve_kill`。
+- `condensed` 将达到门槛的多拍片段拼成纯享视频，默认门槛为 5 拍、5 秒。低于门槛的短分仍会跳过。
+- `vertical` 对前 5 个入选回合做居中裁剪，支持 9:16、1:1 和 16:9。
+- `solo` 根据人工标注的回合主角站位筛选。先在工作台标注，再选“按时间轴导出”。CLI 可通过 `--timeline` 读取人工标注，`--player auto` 选中全部已有站位标注的回合。
+- `showcase` 按长回合和手工标注的打法分组。未提供打法、也未达到长回合门槛的片段归入“打法未判定”。
+- `--reel` 额外拼接合集。HUD、GIF 与慢动作单独开启。默认输出保留源视频分辨率与原编码。
 
-## 📄 开源许可证 (License)
+时间轴中的 `lead_quadrant` 使用 0 近左、1 近右、2 远左、3 远右。未标注使用 `null`。`stroke_style` 使用 `smash`、`drive` 或空字符串。站位相对画面，换边后按当前画面重新标注。请人工复核算法估算的切点、拍数和局界。
 
-本项目基于 [MIT License](LICENSE) 开源。
+## 剪辑速度
+
+- 初次分析提取 16 kHz 音频、识别候选回合并缓存时间轴。同一源文件与分析设置的重复任务复用缓存。换文件、改分析设置或升级算法会重新分析。人工编辑与自动缓存分开存储。需要长期保存时保留导出目录中的 `match_timeline.json`。
+- 只改输出模式、格式或精度时，工作台可直接“按时间轴导出”。CLI 可显式传入 `--timeline`，跳过分析步骤。强制重扫用 `--rescan`。
+- 流复制默认 8 路并发，精剪默认 2 路。机械盘、网络盘或外接盘连续卡顿时，可用 `--jobs 2` 或 `--jobs 4` 对比。使用 `--no-split-by-game` 可跳过分局分析。
+- 流复制速度快，切点受 GOP 影响。`--exact` 重新编码，让成品边界贴合时间轴帧。全程耗时随视频长度、编码、硬盘、候选数量与导出模式变化。
+
+测试可用 `python -m unittest discover -s tests` 运行。需要 FFmpeg 的集成用例会在 FFmpeg 缺失时跳过。
+
+历史变更见 [CHANGELOG.md](CHANGELOG.md)。

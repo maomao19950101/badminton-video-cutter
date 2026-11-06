@@ -6,7 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.8.8] - 2026-11-06 (Current Release)
+## [1.8.9] - 2026-11-06
+
+- CLI 与本地工作台共用时间轴分析及导出引擎，支持仅分析、时间轴复用、可调导出并发和帧级精剪。
+- 隔离同名视频的音频缓存，按源文件、分析参数和版本缓存时间轴，分开保存人工编辑。
+- 优化声学候选扫描与接发秒杀事件窗口查询，减少数组副本和无效分局取帧。
+- 修复相对路径拼接、导出误报和 16:9 比例。个人高光使用人工站位标注，未确认的打法单独分类。
+- 本地 Web 视频接口仅服务已导入的视频，写操作校验请求来源与会话令牌。
+- 精简 Skill 入口，修复 ZIP 中文路径编码与启动器本机路径。
+
+## [1.8.8] - 2026-11-06
 
 ### 🧹 Deprecation & Removal of Tactical Review Mode (发接发前三拍复盘全面下线与纯净五大实战模式)
 - **Engine & Modes Pipeline Refactor (`modes_handler.py`, `badminton_cutter.py`, `gui_engine.py`)**:

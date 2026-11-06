@@ -19,7 +19,6 @@ import platform
 import shutil
 import subprocess
 import tempfile
-import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
@@ -27,6 +26,10 @@ import numpy as np
 
 from badminton_cutter import (
     DEFAULT_FFMPEG,
+    __version__,
+    audio_cache_path,
+    source_fingerprint,
+    cut_exact,
     HAS_CV2,
     _MOTION_CACHE,
     check_clip_is_real_play,
@@ -122,6 +125,8 @@ class CutterConfig:
     rest_gap: float = 22.0
     long_intermission: float = 45.0
     min_rallies_per_game: int = 8
+    exact: bool = False
+    jobs: Optional[int] = None
 
 
 @dataclass
@@ -134,10 +139,12 @@ class RallySegment:
     peaks: List[Tuple[float, float]] = field(default_factory=list)
     enabled: bool = True
     surge: float = 0.0
+    lead_quadrant: Optional[int] = None
+    stroke_style: str = ""
 
     @property
     def dur(self) -> float:
-        return max(0.5, self.e_cut - self.s_cut)
+        return self.e_cut - self.s_cut
 
     @property
     def hit_count(self) -> int:
@@ -156,6 +163,9 @@ class RallySegment:
             "dur": self.dur,
             "peaks": self.peaks,
             "surge": self.surge,
+            "lead_quadrant": self.lead_quadrant,
+            "is_smash": self.stroke_style == "smash",
+            "is_drive": self.stroke_style == "drive",
         }
 
     def to_json_dict(self) -> dict:
@@ -168,6 +178,8 @@ class RallySegment:
             "peaks": [[float(t), float(v)] for t, v in self.peaks],
             "enabled": bool(self.enabled),
             "surge": float(self.surge),
+            "lead_quadrant": self.lead_quadrant,
+            "stroke_style": self.stroke_style,
         }
 
     @classmethod
@@ -181,6 +193,8 @@ class RallySegment:
             peaks=[(float(p[0]), float(p[1])) for p in d.get("peaks", [])],
             enabled=bool(d.get("enabled", True)),
             surge=float(d.get("surge", 0.0)),
+            lead_quadrant=d.get("lead_quadrant"),
+            stroke_style=str(d.get("stroke_style", "")),
         )
 
 
@@ -193,6 +207,9 @@ class VideoTimeline:
     stable_start: float = 0.0
     unstable_end: float = 0.0
     segments: List[RallySegment] = field(default_factory=list)
+    analysis_key: str = ""
+    source_identity: List[object] = field(default_factory=list)
+    serve_kills_scanned: Optional[bool] = None
 
     def get_segment(self, uid: int) -> Optional[RallySegment]:
         for seg in self.segments:
@@ -294,7 +311,11 @@ class VideoTimeline:
 
     def to_dict(self) -> dict:
         return {
-            "version": "1.8.1",
+            "version": __version__,
+            "analysis_key": self.analysis_key,
+            "source_identity": self.source_identity,
+            "serve_kills_scanned": self.serve_kills_scanned,
+            "boundary_method": "estimated_from_audio_and_court_motion",
             "video_path": self.video_path,
             "display_name": self.display_name,
             "folder_name": self.folder_name,
@@ -314,50 +335,71 @@ class VideoTimeline:
             stable_start=float(d.get("stable_start", 0.0)),
             unstable_end=float(d.get("unstable_end", 0.0)),
             segments=[RallySegment.from_json_dict(s) for s in d.get("segments", [])],
+            analysis_key=str(d.get("analysis_key", "")),
+            source_identity=d.get("source_identity", []),
+            serve_kills_scanned=d.get("serve_kills_scanned"),
         )
 
 
-def get_default_timeline_cache_path(vpath: str) -> str:
-    cache_dir = os.path.join(tempfile.gettempdir(), "badminton_timeline_cache")
-    os.makedirs(cache_dir, exist_ok=True)
-    abs_p = os.path.abspath(vpath)
-    mtime = int(os.path.getmtime(abs_p)) if os.path.exists(abs_p) else 0
-    key = hashlib.md5(f"{abs_p}:{mtime}".encode("utf-8")).hexdigest()[:12]
-    bname = os.path.splitext(os.path.basename(abs_p))[0]
-    return os.path.join(cache_dir, f"{bname}_{key}.timeline.json")
+def wants_serve_kills(config: CutterConfig) -> bool:
+    return any(m in config.modes for m in ("all", "highlight", "serve_kill"))
+
+
+def analysis_cache_key(vpath: str, config: CutterConfig) -> str:
+    settings = (
+        __version__, source_fingerprint(vpath), config.ffmpeg_bin, HAS_CV2, wants_serve_kills(config),
+        config.strict_visual, config.min_hits, config.min_duration, config.split_by_game,
+        config.lineup_threshold, config.rest_gap, config.long_intermission, config.min_rallies_per_game,
+    )
+    return hashlib.sha256(json.dumps(settings).encode("utf-8")).hexdigest()
+
+
+def _timeline_cache_path(key: str, edited: bool) -> str:
+    namespace = "edited" if edited else "automatic"
+    return os.path.join(tempfile.gettempdir(), "badminton_timeline_cache_v2", namespace, f"{key}.timeline.json")
 
 
 def save_timeline_json(timeline: VideoTimeline, path: Optional[str] = None) -> str:
     if path is None:
-        path = get_default_timeline_cache_path(timeline.video_path)
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(timeline.to_dict(), f, ensure_ascii=False, indent=2)
+        # Keep edits separate from reproducible analysis. Legacy imported timelines
+        # can be saved explicitly with a path without treating them as scan caches.
+        key = timeline.analysis_key
+        if not key:
+            key = hashlib.sha256(os.path.abspath(timeline.video_path).encode("utf-8")).hexdigest()
+        path = _timeline_cache_path(key, edited=True)
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=directory, delete=False) as f:
+        temporary = f.name
+        try:
+            json.dump(timeline.to_dict(), f, ensure_ascii=False, indent=2, allow_nan=False)
+            f.close()
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.remove(temporary)
     return path
 
 
 def load_timeline_json(path: str) -> Optional[VideoTimeline]:
-    if not path or not os.path.exists(path):
+    if not path or not os.path.isfile(path):
         return None
     try:
         with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return VideoTimeline.from_dict(data)
-    except Exception:
+            return VideoTimeline.from_dict(json.load(f))
+    except (OSError, KeyError, ValueError, TypeError):
         return None
 
 
-def try_load_cached_timeline(vpath: str) -> Optional[VideoTimeline]:
-    # Check sidecar file next to video first, then temp cache
-    sidecar = os.path.splitext(vpath)[0] + ".timeline.json"
-    if os.path.exists(sidecar):
-        tl = load_timeline_json(sidecar)
-        if tl:
-            tl.video_path = vpath
-            return tl
-    cache_p = get_default_timeline_cache_path(vpath)
-    if os.path.exists(cache_p):
-        return load_timeline_json(cache_p)
+def try_load_cached_timeline(vpath: str, config: Optional[CutterConfig] = None) -> Optional[VideoTimeline]:
+    if not os.path.isfile(vpath):
+        return None
+    key = analysis_cache_key(vpath, config or CutterConfig())
+    for edited in (True, False):
+        timeline = load_timeline_json(_timeline_cache_path(key, edited))
+        if timeline is not None and timeline.analysis_key == key:
+            timeline.video_path = os.path.abspath(vpath)
+            return timeline
     return None
 
 
@@ -509,37 +551,27 @@ def analyze_video_file(
     def _cancelled() -> bool:
         return bool(cancel_check and cancel_check())
 
+    vpath = os.path.abspath(vpath)
+    source_identity = list(source_fingerprint(vpath))
+    key = analysis_cache_key(vpath, config)
+    folder_name, display_name = resolve_match_folder_name(vpath, idx)
     if use_cache:
-        cached = try_load_cached_timeline(vpath)
-        if cached and cached.segments:
-            _prog(
-                100.0,
-                f"已从缓存秒级加载：{len(cached.enabled_rallies)} 个多拍 ({cached.game_count} 局)，{len(cached.enabled_serve_kills)} 个接发秒杀",
-            )
-            _log(
-                f"⚡ [{cached.display_name}] 已秒级加载时间轴缓存：{len(cached.enabled_rallies)} 个多拍（{cached.game_count} 局），{len(cached.enabled_serve_kills)} 个秒杀"
-            )
+        cached = try_load_cached_timeline(vpath, config)
+        if cached is not None:
+            cached.folder_name, cached.display_name = folder_name, display_name
+            _prog(100.0, f"已从缓存加载：{len(cached.enabled_rallies)} 个多拍，{len(cached.enabled_serve_kills)} 个接发秒杀")
+            _log(f"⚡ [{display_name}] 已加载时间轴缓存")
             return cached
 
-    folder_name, display_name = resolve_match_folder_name(vpath, idx)
     v_dur = get_video_duration(vpath, config.ffmpeg_bin)
-    timeline = VideoTimeline(
-        video_path=vpath,
-        display_name=display_name,
-        folder_name=folder_name,
-        duration=v_dur,
-        stable_start=0.0,
-        unstable_end=v_dur,
-    )
-
     if v_dur <= 1.0:
-        _log(f"⚠️ 视频时长异常或尚未写入完成: {os.path.basename(vpath)}")
-        return timeline
-
-    temp_audio_dir = os.path.join(tempfile.gettempdir(), "badminton_audio_cache")
-    os.makedirs(temp_audio_dir, exist_ok=True)
-    vname = os.path.splitext(os.path.basename(vpath))[0]
-    wav_path = os.path.join(temp_audio_dir, f"{vname}.wav")
+        raise ValueError(f"视频不可读、时长不超过 1 秒或尚未写入完成: {vpath}")
+    timeline = VideoTimeline(
+        video_path=vpath, display_name=display_name, folder_name=folder_name,
+        duration=v_dur, stable_start=0.0, unstable_end=v_dur,
+        analysis_key=key, source_identity=source_identity,
+    )
+    wav_path = audio_cache_path(vpath, config.ffmpeg_bin)
 
     _prog(5.0, f"正在提取音频轨: {display_name}...")
     _log(f"🎬 开始扫描视频 [{display_name}] (总时长: {format_time_zh(v_dur)})")
@@ -572,7 +604,8 @@ def analyze_video_file(
 
         _prog(32.0, "正在提取候选多拍回合与死球截断...")
         rallies = extract_multi_shot_rallies(
-            peaks, v_dur, min_hits=config.min_hits, cap=cap, fps=fps, vpath=vpath
+            peaks, v_dur, min_dur=config.min_duration, min_hits=config.min_hits,
+            cap=cap, fps=fps, vpath=vpath, ffmpeg_bin=config.ffmpeg_bin
         )
         _log(f"  🏸 初步聚合出候选多拍区间: {len(rallies)} 处")
 
@@ -604,6 +637,7 @@ def analyze_video_file(
                     unstable_end=unstable_end,
                     vpath=vpath,
                     min_hits=config.min_hits,
+                    ffmpeg_bin=config.ffmpeg_bin,
                 ):
                     continue
                 e_cut, r_peaks = detect_visual_deadball_cutoff(
@@ -646,7 +680,13 @@ def analyze_video_file(
 
         # Assign game indices via Player ReID if enabled
         rally_game_map = {i: 1 for i in range(len(valid_rallies))}
-        if config.split_by_game and len(valid_rallies) > 1:
+        earliest_break = min(config.rest_gap, config.long_intermission)
+        can_split = (
+            config.split_by_game and len(valid_rallies) >= 2 * config.min_rallies_per_game
+            and any(current["s_cut"] - previous["e_cut"] >= earliest_break
+                    for previous, current in zip(valid_rallies, valid_rallies[1:]))
+        )
+        if can_split:
             _prog(68.0, f"正在提取 {len(valid_rallies)} 个回合的球员上衣色彩特征 (ReID)...")
             _log("  👕 正在分析四名球员球衣色彩特征与休息间隔，自动划分球局...")
 
@@ -705,8 +745,8 @@ def analyze_video_file(
             uid_counter += 1
 
         # Also extract serve-and-kill clips if requested by modes
-        want_kills = any(m in config.modes for m in ["all", "highlight", "serve_kill"])
-        if want_kills:
+        timeline.serve_kills_scanned = False
+        if wants_serve_kills(config):
             _prog(85.0, "正在扫描发球/接发球一拍定死名场面...")
             kills = extract_true_serve_kills(
                 cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur
@@ -725,12 +765,13 @@ def analyze_video_file(
                     )
                 )
                 uid_counter += 1
+            timeline.serve_kills_scanned = True
             _log(f"  ⚡ 识别到发球/接发秒杀回合: {len(kills)} 处")
 
-        try:
-            save_timeline_json(timeline)
-        except Exception:
-            pass
+        if list(source_fingerprint(vpath)) != source_identity:
+            raise RuntimeError(f"扫描期间源文件发生变化，请重新扫描: {vpath}")
+        if not _cancelled():
+            save_timeline_json(timeline, _timeline_cache_path(key, edited=False))
 
         _prog(
             100.0,
@@ -743,6 +784,22 @@ def analyze_video_file(
     finally:
         if cap is not None:
             cap.release()
+
+
+def _derived_name(path: str, match_dir: str) -> str:
+    return os.path.relpath(path, match_dir).replace(os.sep, "_")
+
+
+def _link_or_copy(source: str, destination: str) -> None:
+    directory = os.path.dirname(destination)
+    os.makedirs(directory, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".badminton-", dir=directory) as staging:
+        staged = os.path.join(staging, os.path.basename(destination))
+        try:
+            os.link(source, staged)
+        except OSError:
+            shutil.copy2(source, staged)
+        os.replace(staged, destination)
 
 
 def export_video_timeline(
@@ -771,26 +828,52 @@ def export_video_timeline(
     def _cancelled() -> bool:
         return bool(cancel_check and cancel_check())
 
-    os.makedirs(output_root, exist_ok=True)
-    match_dir = os.path.join(output_root, timeline.folder_name)
-    os.makedirs(match_dir, exist_ok=True)
-
-    # Save timeline JSON inside the match output folder as well
-    try:
-        save_timeline_json(timeline, os.path.join(match_dir, "match_timeline.json"))
-    except Exception:
-        pass
-
-    enabled_rallies = timeline.enabled_rallies
-    enabled_kills = timeline.enabled_serve_kills
     vpath = timeline.video_path
+    if timeline.source_identity and list(source_fingerprint(vpath)) != timeline.source_identity:
+        raise RuntimeError(f"源文件已更新，请重新扫描后再导出: {vpath}")
+    if os.path.basename(timeline.folder_name) != timeline.folder_name or timeline.folder_name in ("", ".", ".."):
+        raise ValueError("无效的场次目录名")
+    match_dir = os.path.join(os.path.abspath(output_root), timeline.folder_name)
+    os.makedirs(match_dir, exist_ok=True)
+    timeline_path = save_timeline_json(timeline, os.path.join(match_dir, "match_timeline.json"))
+    enabled_rallies = timeline.enabled_rallies if set(config.modes) != {"serve_kill"} else []
+    enabled_kills = timeline.enabled_serve_kills
+    cut = cut_exact if config.exact else cut_lossless
+    jobs = config.jobs if config.jobs is not None else (2 if config.exact else 8)
 
     export_summary = {
-        "match_dir": match_dir,
-        "rally_clips": [],
-        "kill_clips": [],
-        "grand_rallies": [],
+        "match_dir": match_dir, "rally_clips": [], "kill_clips": [],
+        "grand_rallies": [], "artifacts": [timeline_path], "warnings": [],
     }
+
+    def _record(path):
+        if not os.path.isfile(path) or not os.path.getsize(path):
+            raise RuntimeError(f"导出未生成有效文件: {path}")
+        export_summary["artifacts"].append(path)
+
+    def _warn(message):
+        export_summary["warnings"].append(message)
+        _log(f"⚠️ {message}")
+
+    def _concat(paths, destination):
+        concat_clips(config.ffmpeg_bin, paths, destination)
+        _record(destination)
+
+    def _condense(paths, destination):
+        if not generate_condensed_reel(config.ffmpeg_bin, paths, destination):
+            raise RuntimeError(f"没有可用于拼接的片段: {destination}")
+        _record(destination)
+
+    if wants_serve_kills(config) and timeline.serve_kills_scanned is False:
+        _warn("当前时间轴未扫描接发秒杀，若需要该类型请以默认模式重新扫描。")
+    solo_ids = set()
+    if "solo" in config.modes:
+        candidates = [{**seg.to_rally_dict(), "uid": seg.uid} for seg in enabled_rallies]
+        solo_ids = {item["uid"] for item in filter_solo_rallies(candidates, config.player)}
+        if not solo_ids:
+            _warn(f"没有标注为 {config.player} 的回合，跳过个人高光。")
+        if set(config.modes) == {"solo"}:
+            enabled_rallies = [seg for seg in enabled_rallies if seg.uid in solo_ids]
 
     # 1. Cut base multi-shot rally clips (grouped by game if split_by_game is True)
     cut_tasks = []
@@ -844,6 +927,7 @@ def export_video_timeline(
         summary_path = os.path.join(match_dir, "game_summary.txt")
         with open(summary_path, "w", encoding="utf-8") as f_sum:
             f_sum.write("\n".join(summary_lines) + "\n")
+        _record(summary_path)
     else:
         pad = 2 if len(enabled_rallies) < 100 else 3
         for r_idx, seg in enumerate(enabled_rallies, 1):
@@ -855,7 +939,7 @@ def export_video_timeline(
             )
 
     _prog(5.0, f"导出多拍 0/{len(cut_tasks)}")
-    _log(f"  ⚡ 正在并行无损导出 {len(cut_tasks)} 段多拍高清视频...")
+    _log(f"  正在以 {jobs} 路并发{'精剪' if config.exact else '流复制'}导出 {len(cut_tasks)} 段多拍")
 
     clip_paths = []
     dir_to_clips: Dict[str, List[str]] = {}
@@ -869,8 +953,9 @@ def export_video_timeline(
 
         def _do_cut(task):
             c_idx, s, d, out, is_long, pdir, seg_obj = task
-            if not _cancelled():
-                cut_lossless(config.ffmpeg_bin, vpath, s, d, out)
+            if _cancelled():
+                return None
+            cut(config.ffmpeg_bin, vpath, s, d, out)
             with _cut_lock:
                 _cut_done[0] += 1
                 cur_n = _cut_done[0]
@@ -878,10 +963,11 @@ def export_video_timeline(
                 _prog(pct_val, f"导出多拍 {cur_n}/{_total_cuts}")
             return c_idx, out, is_long, pdir, seg_obj.uid
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            results = list(executor.map(_do_cut, cut_tasks))
+        with ThreadPoolExecutor(max_workers=jobs) as executor:
+            results = [result for result in executor.map(_do_cut, cut_tasks) if result is not None]
         results.sort(key=lambda x: x[0])
         for c_idx, out, is_long, pdir, seg_uid in results:
+            _record(out)
             clip_paths.append(out)
             seg_to_clip[seg_uid] = out
             dir_to_clips.setdefault(pdir, []).append(out)
@@ -900,14 +986,10 @@ def export_video_timeline(
                 g_clips = dir_to_clips.get(g_dir_path, [])
                 if g_clips:
                     reel_name = f"00_【第{g_idx:02d}局_纯多拍合集】_全{len(g_clips)}段精选版.mp4"
-                    concat_clips(
-                        config.ffmpeg_bin, g_clips, os.path.join(g_dir_path, reel_name)
-                    )
+                    _concat(g_clips, os.path.join(g_dir_path, reel_name))
         else:
             reel_name = f"00_【{timeline.display_name}_纯多拍零死球合集】_全{len(clip_paths)}段精选版.mp4"
-            concat_clips(
-                config.ffmpeg_bin, clip_paths, os.path.join(match_dir, reel_name)
-            )
+            _concat(clip_paths, os.path.join(match_dir, reel_name))
 
     # 3. Optional Broadcast HUD
     if clip_paths and config.hud:
@@ -919,9 +1001,7 @@ def export_video_timeline(
                 break
             hud_out = os.path.join(hud_dir, f"HUD_{os.path.basename(clip_p)}")
             dur = get_video_duration(clip_p, config.ffmpeg_bin)
-            clip_wav = os.path.join(
-                tempfile.gettempdir(), f"{os.path.basename(clip_p)}.wav"
-            )
+            clip_wav = audio_cache_path(clip_p, config.ffmpeg_bin)
             extract_audio_wav(clip_p, clip_wav, config.ffmpeg_bin)
             c_peaks = detect_hits(clip_wav, th_val=5.0e6)
             verified = verify_multimodal_shots(c_peaks)
@@ -934,67 +1014,55 @@ def export_video_timeline(
                     title=f"焦点拉锯_{int(round(dur))}秒",
                     total_dur=dur,
                 )
-            if os.path.exists(clip_wav):
-                os.remove(clip_wav)
+                _record(hud_out)
 
-    # 4. Additional Selected Modes (condensed, vertical, solo, review, showcase)
+    # 4. Additional Selected Modes (condensed, vertical, solo, showcase)
     if "condensed" in config.modes and clip_paths:
-        _prog(60.0, "正在生成【一刀不剪·纯享紧凑版】连贯长片...")
-        _log("  ⏱️ 正在合成【一刀不剪·纯享紧凑版】连贯视频...")
+        _prog(60.0, "正在生成【多拍纯享】连贯长片...")
+        _log("  ⏱️ 正在合成【多拍纯享】连贯视频...")
         if all_game_dirs:
             for g_dir_path, g_idx, _ in all_game_dirs:
                 g_clips = dir_to_clips.get(g_dir_path, [])
                 if g_clips:
-                    c_name = f"00_【第{g_idx:02d}局_比赛浓缩纯享】_全{len(g_clips)}段连贯版.mp4"
-                    generate_condensed_reel(
-                        config.ffmpeg_bin, g_clips, os.path.join(g_dir_path, c_name)
-                    )
+                    c_name = f"00_【第{g_idx:02d}局_多拍纯享】_全{len(g_clips)}段连贯版.mp4"
+                    _condense(g_clips, os.path.join(g_dir_path, c_name))
         else:
-            c_name = f"00_【{timeline.display_name}_比赛浓缩纯享】_全{len(clip_paths)}段连贯版.mp4"
-            generate_condensed_reel(
-                config.ffmpeg_bin, clip_paths, os.path.join(match_dir, c_name)
-            )
+            c_name = f"00_【{timeline.display_name}_多拍纯享】_全{len(clip_paths)}段连贯版.mp4"
+            _condense(clip_paths, os.path.join(match_dir, c_name))
 
     if "vertical" in config.modes and clip_paths:
-        _prog(68.0, f"正在生成【{config.aspect_ratio} 竖屏短视频】...")
-        _log(f"  📱 正在裁剪生成【{config.aspect_ratio} 竖屏短视频】...")
-        vert_dir = os.path.join(match_dir, "竖屏9比16自媒体短视频")
+        _prog(68.0, f"正在生成【{config.aspect_ratio} 比例裁剪】...")
+        _log(f"  📱 正在裁剪生成【{config.aspect_ratio} 比例裁剪】...")
+        folder = {"9:16": "竖屏9比16自媒体短视频", "1:1": "方形1比1短视频", "16:9": "横屏16比9短视频"}
+        vert_dir = os.path.join(match_dir, folder[config.aspect_ratio])
         os.makedirs(vert_dir, exist_ok=True)
         for c_path in clip_paths[:5]:
             if _cancelled():
                 break
-            v_out = os.path.join(vert_dir, f"竖屏_{os.path.basename(c_path)}")
-            generate_vertical_clip(
-                config.ffmpeg_bin, c_path, v_out, aspect_ratio=config.aspect_ratio
-            )
+            v_out = os.path.join(vert_dir, f"比例转换_{_derived_name(c_path, match_dir)}")
+            if not generate_vertical_clip(config.ffmpeg_bin, c_path, v_out, aspect_ratio=config.aspect_ratio):
+                raise RuntimeError(f"比例转换缺少源片段: {c_path}")
+            _record(v_out)
 
-    if "solo" in config.modes and enabled_rallies:
+    if solo_ids:
         _prog(74.0, f"正在导出【个人高光 Solo 视角 ({config.player})】...")
         _log(f"  🌟 正在筛选导出【个人高光 Solo 视角 ({config.player})】...")
-        rally_dicts = [
-            {**seg.to_rally_dict(), "_uid": seg.uid, "index": idx}
-            for idx, seg in enumerate(enabled_rallies)
-        ]
-        solo_selected = filter_solo_rallies(rally_dicts, target_player=config.player)
         solo_dir = os.path.join(match_dir, f"个人高光Solo视角_{config.player}")
-        os.makedirs(solo_dir, exist_ok=True)
         solo_clips = []
-        for s_item in solo_selected:
-            src_clip = seg_to_clip.get(s_item["_uid"])
+        for uid, src_clip in seg_to_clip.items():
+            if uid not in solo_ids:
+                continue
             if src_clip and os.path.exists(src_clip):
-                dst_clip = os.path.join(solo_dir, os.path.basename(src_clip))
-                if not os.path.exists(dst_clip):
-                    try:
-                        os.link(src_clip, dst_clip)
-                    except OSError:
-                        shutil.copy2(src_clip, dst_clip)
+                dst_clip = os.path.join(solo_dir, _derived_name(src_clip, match_dir))
+                _link_or_copy(src_clip, dst_clip)
+                _record(dst_clip)
                 solo_clips.append(dst_clip)
         if solo_clips:
             solo_reel = os.path.join(
                 solo_dir,
                 f"00_【个人高光Solo合集_{config.player}】_全{len(solo_clips)}段.mp4",
             )
-            generate_condensed_reel(config.ffmpeg_bin, solo_clips, solo_reel)
+            _condense(solo_clips, solo_reel)
 
     if "showcase" in config.modes and enabled_rallies:
         _prog(86.0, "正在分拣导出【球风分类视频库】...")
@@ -1014,22 +1082,16 @@ def export_video_timeline(
             for cr in cat_rallies:
                 src_cp = seg_to_clip.get(cr.get("_uid"))
                 if src_cp and os.path.exists(src_cp):
-                    dst_cp = os.path.join(cat_sub, os.path.basename(src_cp))
-                    if not os.path.exists(dst_cp):
-                        try:
-                            os.link(src_cp, dst_cp)
-                        except OSError:
-                            shutil.copy2(src_cp, dst_cp)
+                    dst_cp = os.path.join(cat_sub, _derived_name(src_cp, match_dir))
+                    _link_or_copy(src_cp, dst_cp)
+                    _record(dst_cp)
                     cat_clip_paths.append(dst_cp)
             if cat_clip_paths:
                 c_reel = f"00_【{cat_name}】_全{len(cat_clip_paths)}段大合集.mp4"
-                generate_condensed_reel(
-                    config.ffmpeg_bin, cat_clip_paths, os.path.join(cat_sub, c_reel)
-                )
+                _condense(cat_clip_paths, os.path.join(cat_sub, c_reel))
 
     # 5. Serve-and-kill clips export
-    want_kills = any(m in config.modes for m in ["all", "highlight", "serve_kill"])
-    if want_kills and enabled_kills:
+    if wants_serve_kills(config) and enabled_kills:
         _prog(92.0, f"正在导出 {len(enabled_kills)} 段接发秒杀视频...")
         kill_dir = os.path.join(match_dir, "接发秒杀一拍定死")
         os.makedirs(kill_dir, exist_ok=True)
@@ -1043,30 +1105,40 @@ def export_video_timeline(
 
         def _do_kill_cut(task):
             k_i, s, d, out = task
-            if not _cancelled():
-                cut_lossless(config.ffmpeg_bin, vpath, s, d, out)
+            if _cancelled():
+                return None
+            cut(config.ffmpeg_bin, vpath, s, d, out)
             return k_i, out
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            k_results = list(executor.map(_do_kill_cut, kill_tasks))
+        with ThreadPoolExecutor(max_workers=jobs) as executor:
+            k_results = [result for result in executor.map(_do_kill_cut, kill_tasks) if result is not None]
         k_results.sort(key=lambda x: x[0])
         kill_clips = [r[1] for r in k_results]
         export_summary["kill_clips"] = kill_clips
+        for clip in kill_clips:
+            _record(clip)
+        if _cancelled():
+            return export_summary
 
         if config.gif:
             for k_i, kclip_p in enumerate(kill_clips[:5], 1):
                 gif_path = os.path.join(kill_dir, f"表情包_{k_i:02d}.gif")
-                generate_gif(config.ffmpeg_bin, kclip_p, gif_path, "发球被一拍定死")
+                generate_gif(config.ffmpeg_bin, kclip_p, gif_path, "接发秒杀候选")
+                _record(gif_path)
 
         if config.slowmo and kill_clips:
             slowmo_path = os.path.join(kill_dir, "慢动作回放_01.mp4")
             generate_slowmo_replay(config.ffmpeg_bin, kill_clips[0], slowmo_path)
+            _record(slowmo_path)
 
         if config.reel and kill_clips:
             kill_reel_name = f"00_【{timeline.display_name}_发球被一拍定死合集】_全{len(kill_clips)}个名场面.mp4"
-            concat_clips(
-                config.ffmpeg_bin, kill_clips, os.path.join(kill_dir, kill_reel_name)
-            )
+            _concat(kill_clips, os.path.join(kill_dir, kill_reel_name))
+
+    if not clip_paths and not export_summary["kill_clips"]:
+        _warn("没有符合条件的回合，仅保存时间轴。")
+    if _cancelled():
+        return export_summary
 
     _prog(
         100.0,
@@ -1094,6 +1166,7 @@ def export_batch_timelines(
     all_grand_rallies: List[str] = []
     all_grand_kills: List[str] = []
     match_summaries = []
+    batch_artifacts = []
     total_v = max(1, len(timelines))
 
     for idx, tl in enumerate(timelines, 1):
@@ -1124,28 +1197,35 @@ def export_batch_timelines(
             if os.path.exists(kclip):
                 base_k = os.path.basename(kclip)
                 dest_k = os.path.join(grand_kill_dir, f"全场秒杀{g_idx:02d}_{base_k}")
-                if not os.path.exists(dest_k):
-                    try:
-                        os.link(kclip, dest_k)
-                    except OSError:
-                        shutil.copy2(kclip, dest_k)
+                _link_or_copy(kclip, dest_k)
+                batch_artifacts.append(dest_k)
+        for match in match_summaries:
+            for artifact in match["artifacts"]:
+                if artifact.lower().endswith(".gif"):
+                    dest = os.path.join(grand_kill_dir, "微信表情包GIF",
+                                        os.path.basename(match["match_dir"]) + "_" + os.path.basename(artifact))
+                    _link_or_copy(artifact, dest)
+                    batch_artifacts.append(dest)
         if config.reel:
             grand_kill_reel = os.path.join(
                 grand_kill_dir, "00_【发球被一拍定死_接发秒杀连贯大赏】_全场纯净原画版.mp4"
             )
             concat_clips(config.ffmpeg_bin, all_grand_kills, grand_kill_reel)
+            batch_artifacts.append(grand_kill_reel)
 
     if config.reel and all_grand_rallies and not (cancel_check and cancel_check()):
         grand_reel_path = os.path.join(
             output_root, "00_【全场巅峰超长多拍TOP大集锦】_纯净原画零死球无字幕版.mp4"
         )
         concat_clips(config.ffmpeg_bin, all_grand_rallies, grand_reel_path)
+        batch_artifacts.append(grand_reel_path)
 
-    if progress_cb:
+    if progress_cb and not (cancel_check and cancel_check()):
         progress_cb(100.0, f"🎉 全部 {len(match_summaries)} 场视频剪辑与导出完成！")
 
     return {
         "matches": match_summaries,
         "grand_rallies": all_grand_rallies,
         "grand_kills": all_grand_kills,
+        "artifacts": batch_artifacts,
     }

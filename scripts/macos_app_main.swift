@@ -39,11 +39,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDe
         if let icnsPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
            let img = NSImage(contentsOfFile: icnsPath) {
             NSApp.applicationIconImage = img
-        } else {
-            let fallbackPath = "/Users/harry/.gemini/config/skills/badminton-video-cutter/assets/AppIcon.icns"
-            if let img = NSImage(contentsOfFile: fallbackPath) {
-                NSApp.applicationIconImage = img
-            }
         }
     }
 
@@ -151,12 +146,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDe
     }
 
     private func startPythonBackend() {
-        let scriptPath = "/Users/harry/.gemini/config/skills/badminton-video-cutter/scripts/codex_server.py"
+        let scriptPath = ProcessInfo.processInfo.environment["BADMINTON_STUDIO_SCRIPT"]
+            ?? Bundle.main.url(forResource: "codex_server", withExtension: "py", subdirectory: "scripts")?.path
+            ?? ""
         guard FileManager.default.fileExists(atPath: scriptPath) else { return }
 
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        proc.arguments = [scriptPath, "--no-open", "--port", "18765"]
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        proc.arguments = ["python3", scriptPath, "--no-open", "--port", "18765"]
         var env = ProcessInfo.processInfo.environment
         let extraPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
         env["PATH"] = extraPath + ":" + (env["PATH"] ?? "")

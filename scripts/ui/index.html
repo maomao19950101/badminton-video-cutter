@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN" data-theme="dark">
 <head>
+  <meta name="studio-session-token" content="__STUDIO_SESSION_TOKEN__">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>羽毛球比赛剪辑工作室 · Badminton Studio Pro</title>
@@ -1086,6 +1087,8 @@
             <div class="divider-v"></div>
 
             <!-- Keep Toggle Button -->
+            <button class="btn-pro" onclick="markSelectedRally()">标注回合</button>
+            <button class="btn-pro" onclick="startJob('timeline')">按时间轴导出</button>
             <button class="btn-keep-toggle active" id="keepToggleBtn" onclick="toggleSelectedSegment()" title="保留/跳过本回合 (快捷键: Delete)">
               <svg class="flat-icon sm" id="keepIcon"><use href="#ic-check"/></svg>
               <span id="keepLabel">✓ 保留本回合</span>
@@ -1140,6 +1143,11 @@
         <label style="font-size:11px; color:var(--text-secondary);">默认导出目录</label>
         <div style="display:flex; gap:6px;">
           <input type="text" id="outDirInput" class="mono" onchange="savePrefsFromUI()" />
+        </div>
+        <div class="control-row" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px;">
+          <label><input type="checkbox" id="exactExport"> 帧级精剪</label>
+          <label>比例 <select id="exportAspectRatio"><option>9:16</option><option>1:1</option><option>16:9</option></select></label>
+          <label>站位 <select id="soloPlayer"><option value="near_left">近左</option><option value="near_right">近右</option><option value="far_left">远左</option><option value="far_right">远右</option><option value="auto">已标注</option></select></label>
           <button class="btn-pro" onclick="browseNative('output')">
             <svg class="flat-icon sm"><use href="#ic-folder-open"/></svg> 浏览
           </button>
@@ -1182,10 +1190,10 @@
   <script>
     const MODES_META = [
       { key: "all",       icon: "ic-shuttle", name: "按局分段", desc: "默认标准：自动按比赛对局切分全部多拍回合" },
-      { key: "condensed", icon: "ic-bolt",    name: "连贯纯享", desc: "剔除死球走动等待，整场紧凑纯享连播" },
-      { key: "vertical",  icon: "ic-phone",   name: "9:16竖屏", desc: "手机竖屏短视频智能裁剪居中导出" },
-      { key: "solo",      icon: "ic-user",    name: "主角独享", desc: "指定主角球员出场时段独立集锦" },
-      { key: "showcase",  icon: "ic-star",    name: "五佳高光", desc: "Top 5 极限拉锯多拍与慢镜重放" },
+      { key: "condensed", icon: "ic-bolt",    name: "多拍纯享", desc: "连播符合拍数与时长门槛的回合" },
+      { key: "vertical",  icon: "ic-phone",   name: "短视频裁剪", desc: "竖屏、方形或横屏居中裁剪，导出前五个入选回合" },
+      { key: "solo",      icon: "ic-user",    name: "主角独享", desc: "按时间轴手动标注的球员站位筛选" },
+      { key: "showcase",  icon: "ic-star",    name: "分类高光", desc: "按长回合与手动标注的打法分类" },
     ];
 
     let appState = null;
@@ -1207,10 +1215,18 @@
     async function apiPost(url, payload = {}) {
       const r = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Studio-Token": document.querySelector('meta[name="studio-session-token"]').content,
+        },
         body: JSON.stringify(payload),
       });
-      return await r.json();
+      const result = await r.json();
+      if (!r.ok) {
+        alert(result.error || `操作失败 (${r.status})`);
+        return appState;
+      }
+      return result;
     }
 
     function formatTime(s) {
@@ -1254,7 +1270,14 @@
       const curVideo = state.current_vpath || state.current_video;
       if (curVideo && (!preserveVideo || loadedVideoPath !== curVideo)) {
         loadedVideoPath = curVideo;
-        videoEl.src = `/api/video_stream?path=${encodeURIComponent(curVideo)}`;
+        const videoId = (state.videos || []).find(v => v.path === curVideo)?.id;
+        if (videoId) {
+          videoEl.src = `/api/video?id=${encodeURIComponent(videoId)}`;
+          videoEl.load();
+        }
+      } else if (!curVideo && loadedVideoPath) {
+        loadedVideoPath = null;
+        videoEl.removeAttribute("src");
         videoEl.load();
       }
 
@@ -1299,12 +1322,15 @@
         card.className = `video-card ${isCur ? "active" : ""}`;
         card.onclick = () => selectVideo(vPath);
         card.innerHTML = `
-          <div class="video-name" title="${vName}">${vName}</div>
+          <div class="video-name"></div>
           <div class="video-meta">
             <span class="video-tag">${count}</span>
             <span class="mono">${isCur ? "当前对战" : "就绪"}</span>
           </div>
         `;
+        const nameEl = card.querySelector(".video-name");
+        nameEl.textContent = vName;
+        nameEl.title = vName;
         container.appendChild(card);
       });
     }
@@ -1659,6 +1685,25 @@
       await apiPost("/api/save_prefs", { theme_mode: next });
     }
 
+    async function markSelectedRally() {
+      const seg = appState?.timeline?.segments?.[selectedSegIdx];
+      if (!seg || seg.kind !== "rally") return;
+      const current = seg.lead_quadrant ?? "";
+      const lead = prompt("回合主角站位：0 近左、1 近右、2 远左、3 远右，留空清除。", current);
+      if (lead === null) return;
+      const style = prompt("打法：smash 重杀、drive 平抽快攻，留空清除。", seg.stroke_style || "");
+      if (style === null) return;
+      if (!["", "0", "1", "2", "3"].includes(lead) || !["", "smash", "drive"].includes(style)) {
+        alert("标注值无效");
+        return;
+      }
+      const state = await apiPost("/api/update_segment", {
+        uid: seg.uid, action: "mark_rally",
+        lead_quadrant: lead === "" ? null : Number(lead), stroke_style: style,
+      });
+      renderAll(state, true);
+    }
+
     async function startJob(kind) {
       const isRunning = appState?.job?.is_running;
       if (isRunning) {
@@ -1666,12 +1711,15 @@
         renderAll(st, true);
         return;
       }
-      const jobType = kind === "scan" ? "force_rescan" : "one_click";
+      const jobType = kind === "scan" ? "force_rescan" : (kind === "timeline" ? "export_only" : "one_click");
       const st = await apiPost("/api/start_job", {
         job_type: jobType,
         config: {
           output_dir: document.getElementById("outDirInput").value,
           modes: selectedModes,
+          exact: document.getElementById("exactExport").checked,
+          player: document.getElementById("soloPlayer").value,
+          aspect_ratio: document.getElementById("exportAspectRatio").value,
           min_hits: Number(document.getElementById("slMinHits").value || 5),
           min_duration: Number(document.getElementById("slMinDur").value || 5.0),
           rest_gap: Number(document.getElementById("slRestGap").value || 22.0),
@@ -1698,13 +1746,13 @@
         label.textContent = "⏹ 停止剪辑任务";
         icon.innerHTML = '<use href="#ic-stop"/>';
 
-        const pct = Math.min(100, Math.max(0, job.pct || 0));
+        const pct = Math.round(Math.min(100, Math.max(0, job.progress || 0)));
         ribbon.style.width = `${pct}%`;
         ribbon.classList.add("active");
 
         pBox.style.display = "flex";
         pFill.style.width = `${pct}%`;
-        pStep.textContent = job.message || "正在处理视频...";
+        pStep.textContent = job.status || "正在处理视频...";
         pPct.textContent = `${pct}%`;
 
         topPill.style.display = "inline-flex";
@@ -1716,7 +1764,13 @@
 
         ribbon.style.width = "0%";
         ribbon.classList.remove("active");
-        pBox.style.display = "none";
+        const failed = /^(任务失败|导出提示):/.test(job?.status || "");
+        pBox.style.display = failed ? "flex" : "none";
+        if (failed) {
+          pStep.textContent = job.status;
+          pPct.textContent = "";
+          pFill.style.width = "0%";
+        }
         topPill.style.display = "none";
       }
     }

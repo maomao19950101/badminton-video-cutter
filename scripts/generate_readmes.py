@@ -178,6 +178,6 @@ def generate(output_dir):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", "-o", default="/Users/harry/视频/1019羽毛球精彩多拍集锦", help="Output directory")
+    parser.add_argument("--output", "-o", required=True, help="Output directory")
     args = parser.parse_args()
     generate(args.output)

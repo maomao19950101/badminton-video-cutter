@@ -13,6 +13,9 @@ Features:
 """
 
 import argparse
+import hashlib
+import math
+import secrets
 import json
 import mimetypes
 import os
@@ -33,6 +36,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from badminton_cutter import DEFAULT_FFMPEG, __version__, format_time_zh
+from modes_handler import VIDEO_EXTENSIONS
 from gui_engine import (
     CutterConfig,
     VideoTimeline,
@@ -79,6 +83,7 @@ PREFS_PATH = os.path.join(tempfile.gettempdir(), "badminton_gui_preferences.json
 UI_HTML_PATH = _resolve_ui_html_path()
 APP_ICON_PNG_PATH = _resolve_asset_path("app_icon.png")
 APP_ICON_ICO_PATH = _resolve_asset_path("app_icon.ico")
+SESSION_TOKEN = secrets.token_urlsafe(32)
 
 
 class StudioState:
@@ -86,10 +91,7 @@ class StudioState:
         self.lock = threading.Lock()
         self.hw_encoder = detect_hw_video_encoder(DEFAULT_FFMPEG)
         self.theme_mode = "dark"
-        default_out = os.path.join(os.path.expanduser("~"), "Desktop", "羽毛球AI剪辑输出")
-        if os.path.exists("/Users/harry/视频/1029羽毛球精彩多拍集锦"):
-            default_out = "/Users/harry/视频/1029羽毛球精彩多拍集锦"
-        self.output_dir = default_out
+        self.output_dir = os.path.join(os.path.expanduser("~"), "Desktop", "羽毛球剪辑输出")
 
         self.video_files: List[str] = []
         self.timelines: Dict[str, VideoTimeline] = {}
@@ -104,7 +106,6 @@ class StudioState:
         ]
 
         self._load_prefs()
-        self._auto_load_default_videos()
 
     def _load_prefs(self):
         if os.path.exists(PREFS_PATH):
@@ -134,12 +135,6 @@ class StudioState:
         except Exception:
             pass
 
-    def _auto_load_default_videos(self):
-        for candidate in ["/Users/harry/视频/1102", "/Users/harry/视频/1029"]:
-            if os.path.isdir(candidate):
-                self.import_folder(candidate)
-                break
-
     def add_log(self, msg: str):
         with self.lock:
             ts = time.strftime("%H:%M:%S")
@@ -153,8 +148,9 @@ class StudioState:
             self.status_text = status
 
     def register_video(self, vpath: str) -> bool:
-        vpath = os.path.abspath(vpath)
-        if not os.path.isfile(vpath) or vpath in self.video_files:
+        vpath = os.path.realpath(vpath)
+        if (not vpath.lower().endswith(VIDEO_EXTENSIONS) or not os.path.isfile(vpath)
+                or vpath in self.video_files):
             return False
         self.video_files.append(vpath)
         cached = try_load_cached_timeline(vpath)
@@ -169,7 +165,7 @@ class StudioState:
             return 0
         added = 0
         for fname in sorted(os.listdir(folder)):
-            if fname.lower().endswith((".mp4", ".mov", ".mkv", ".ts")):
+            if fname.lower().endswith(VIDEO_EXTENSIONS):
                 if self.register_video(os.path.join(folder, fname)):
                     added += 1
         if added:
@@ -190,6 +186,7 @@ class StudioState:
                 videos_list.append(
                     {
                         "path": v,
+                        "id": video_id(v),
                         "name": os.path.basename(v),
                         "cached": tl is not None,
                         "rally_count": len(tl.enabled_rallies) if tl else 0,
@@ -214,6 +211,10 @@ class StudioState:
                     "logs": self.logs[-40:],
                 },
             }
+
+
+def video_id(path: str) -> str:
+    return hashlib.sha256(path.encode("utf-8", errors="surrogatepass")).hexdigest()
 
 
 STATE = StudioState()
@@ -326,14 +327,28 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _valid_host(self) -> bool:
+        return self.headers.get_all("Host", []) == [f"127.0.0.1:{self.server.server_port}"]
+
+    def _registered_video(self, identifier: str) -> Optional[str]:
+        for path in STATE.video_files:
+            if video_id(path) == identifier and os.path.realpath(path) == path:
+                return path
+        return None
+
     def _read_json_body(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
-        if length <= 0:
-            return {}
-        raw = self.rfile.read(length)
-        return json.loads(raw.decode("utf-8"))
+        if not 0 < length <= 64 * 1024:
+            raise ValueError("无效的请求长度")
+        data = json.loads(self.rfile.read(length).decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("请求需要 JSON 对象")
+        return data
 
     def do_GET(self):
+        if not self._valid_host():
+            self.send_error(403)
+            return
         parsed = urllib.parse.urlparse(self.path)
         route = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
@@ -343,11 +358,12 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(404, "UI index.html not found")
                 return
             with open(UI_HTML_PATH, "rb") as f:
-                content = f.read()
+                content = f.read().replace(b"__STUDIO_SESSION_TOKEN__", SESSION_TOKEN.encode("ascii"))
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content)))
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Frame-Options", "DENY")
             self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(content)
@@ -389,8 +405,17 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
             return
 
         if route == "/api/frame":
-            vpath = qs.get("path", [""])[0]
-            t_sec = float(qs.get("t", ["0"])[0])
+            vpath = self._registered_video(qs.get("id", [""])[0])
+            if not vpath:
+                self.send_error(404, "Video not registered")
+                return
+            try:
+                t_sec = float(qs.get("t", ["0"])[0])
+                if not math.isfinite(t_sec) or t_sec < 0:
+                    raise ValueError
+            except ValueError:
+                self.send_error(400, "Invalid timestamp")
+                return
             jpg = extract_jpeg_frame_bytes(vpath, t_sec)
             if not jpg:
                 self.send_error(404, "Frame not available")
@@ -404,8 +429,8 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(jpg)
             return
 
-        if route == "/api/video":
-            vpath = qs.get("path", [""])[0]
+        if route in ("/api/video", "/api/video_stream"):
+            vpath = self._registered_video(qs.get("id", [""])[0])
             self._serve_video_stream(vpath)
             return
 
@@ -425,17 +450,21 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
         status = HTTPStatus.OK
 
         if range_hdr:
-            m = re.match(r"bytes=(\d+)-(\d*)", range_hdr)
-            if m:
+            m = re.fullmatch(r"bytes=(\d{0,20})-(\d{0,20})", range_hdr)
+            if not m or not any(m.groups()):
+                self.send_error(400, "Invalid Range")
+                return
+            if not m.group(1):
+                start = max(0, file_size - int(m.group(2)))
+            else:
                 start = int(m.group(1))
                 if m.group(2):
                     end = min(file_size - 1, int(m.group(2)))
                 else:
-                    # Stream in 4MB chunks for fast scrubbing responsiveness
                     end = min(file_size - 1, start + 4 * 1024 * 1024 - 1)
-                status = HTTPStatus.PARTIAL_CONTENT
+            status = HTTPStatus.PARTIAL_CONTENT
 
-        if start >= file_size:
+        if start >= file_size or end < start:
             self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
             self.send_header("Content-Range", f"bytes */{file_size}")
             self.send_header("Connection", "close")
@@ -466,9 +495,22 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
             pass
 
     def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-        route = parsed.path
-        body = self._read_json_body()
+        origin = self.headers.get("Origin")
+        expected_origin = f"http://127.0.0.1:{self.server.server_port}"
+        token = self.headers.get("X-Studio-Token", "").encode("latin-1")
+        if (not self._valid_host() or (origin and origin != expected_origin)
+                or not secrets.compare_digest(token, SESSION_TOKEN.encode("ascii"))):
+            self._send_json({"error": "请求来源或工作台会话无效"}, 403)
+            return
+        if self.headers.get_content_type() != "application/json":
+            self._send_json({"error": "需要 JSON 请求"}, 415)
+            return
+        route = urllib.parse.urlparse(self.path).path
+        try:
+            body = self._read_json_body()
+        except (ValueError, UnicodeError):
+            self._send_json({"error": "请求 JSON 无效"}, 400)
+            return
 
         if route == "/api/select_video":
             vpath = body.get("path")
@@ -547,7 +589,16 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
                 return
             uid = int(body.get("uid", 0))
             action = body.get("action")
-            if action == "adjust_time":
+            if action == "mark_rally":
+                quadrant = body.get("lead_quadrant")
+                style = body.get("stroke_style", "")
+                seg = tl.get_segment(uid)
+                if (not seg or seg.kind != "rally" or style not in ("", "smash", "drive")
+                        or (quadrant is not None and (type(quadrant) is not int or quadrant not in range(4)))):
+                    self._send_json({"error": "无效的回合标注"}, 400)
+                    return
+                seg.lead_quadrant, seg.stroke_style = quadrant, style
+            elif action == "adjust_time":
                 ds = float(body.get("delta_start", 0.0))
                 de = float(body.get("delta_end", 0.0))
                 seg = tl.adjust_segment_time(uid, delta_start=ds, delta_end=de)
@@ -597,7 +648,8 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
                 reel=bool(cfg_data.get("reel", False)),
                 hud=bool(cfg_data.get("hud", False)),
                 slowmo=bool(cfg_data.get("slowmo", False)),
-                gif=bool(cfg_data.get("slowmo", False)),
+                gif=bool(cfg_data.get("gif", False)),
+                exact=bool(cfg_data.get("exact", False)),
                 strict_visual=True,
                 min_hits=int(cfg_data.get("min_hits", 5)),
                 min_duration=float(cfg_data.get("min_duration", 5.0)),
@@ -605,8 +657,12 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
                 min_rallies_per_game=int(cfg_data.get("min_rallies_per_game", 8)),
             )
 
-            STATE.is_running = True
-            STATE.cancel_requested = False
+            with STATE.lock:
+                if STATE.is_running:
+                    self._send_json({"error": "Job already running"}, 400)
+                    return
+                STATE.is_running = True
+                STATE.cancel_requested = False
 
             def _worker():
                 try:
@@ -636,9 +692,11 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
 
                     if job_type in ("one_click", "export_only") and not STATE.cancel_requested:
                         items = [STATE.timelines[v] for v in STATE.video_files if v in STATE.timelines]
+                        if not items:
+                            raise ValueError("请先扫描视频，建立时间轴后再导出")
                         base_pct = 55.0 if job_type == "one_click" else 0.0
                         span_pct = 45.0 if job_type == "one_click" else 100.0
-                        export_batch_timelines(
+                        result = export_batch_timelines(
                             items,
                             output_root=STATE.output_dir,
                             config=config,
@@ -648,10 +706,15 @@ class CodexRequestHandler(BaseHTTPRequestHandler):
                             log_cb=STATE.add_log,
                             cancel_check=lambda: STATE.cancel_requested,
                         )
+                        warnings = [msg for match in result["matches"] for msg in match["warnings"]]
+                        if warnings and not STATE.cancel_requested:
+                            STATE.set_progress(100.0, f"导出提示: {warnings[0]}")
                 except Exception as e:
                     STATE.add_log(f"❌ 任务执行异常: {e}")
+                    STATE.set_progress(STATE.progress, f"任务失败: {e}")
                 finally:
-                    STATE.is_running = False
+                    with STATE.lock:
+                        STATE.is_running = False
 
             threading.Thread(target=_worker, daemon=True).start()
             self._send_json(STATE.to_summary_dict())
@@ -697,8 +760,8 @@ def open_standalone_app_window(url: str):
     ]
     sys_name = platform.system()
     if sys_name == "Darwin":
-        native_app = os.path.expanduser("~/Desktop/羽毛球AI剪辑大师.app")
-        if os.path.exists(native_app):
+        native_app = os.environ.get("BADMINTON_STUDIO_APP")
+        if native_app and os.path.exists(native_app):
             subprocess.Popen(
                 ["open", "-a", native_app, "--args", f"--url={url}"],
                 stdout=subprocess.DEVNULL,
@@ -744,7 +807,7 @@ def is_server_already_running(port: int) -> bool:
     try:
         with opener.open(f"http://127.0.0.1:{port}/api/state", timeout=0.8) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return "version" in data and "videos" in data
+            return data.get("version") == __version__ and "videos" in data
     except Exception:
         return False
 
@@ -778,6 +841,7 @@ def main():
             assert "videos" in data
         print(f"CODEX_SERVER_SELF_TEST_OK ({url})")
         server.shutdown()
+        server.server_close()
         return
 
     print(f"🏸 Codex Studio Local Engine running at: {url}")

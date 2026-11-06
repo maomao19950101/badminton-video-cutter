@@ -15,12 +15,16 @@ Comprehensive, broadcast-standard pipeline for badminton match footage:
 import os
 import sys
 import argparse
+from bisect import bisect_left, bisect_right
+import hashlib
+import json
+import math
 import subprocess
 import wave
 import shutil
-import time
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 # Optional OpenCV for visual dead-ball and motion analysis
@@ -30,30 +34,27 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-from match_segmenter import (
-    extract_serve_keyframe,
-    extract_court_player_embeddings,
-    partition_rallies_by_game
-)
 from modes_handler import (
     generate_condensed_reel,
-    generate_vertical_clip,
-    filter_solo_rallies,
-    categorize_showcase_rallies,
+    run_media_export,
+    VIDEO_EXTENSIONS,
+    PLAYER_QUADRANTS,
 )
 
-__version__ = "1.8.8"
+__version__ = "1.8.9"
 
 
 def resolve_ffmpeg_bin():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(base_dir)
+    configured = os.environ.get("BADMINTON_FFMPEG")
+    if configured:
+        return configured
     candidates = [
         os.path.join(root_dir, "bin", "ffmpeg.exe"),
         os.path.join(base_dir, "bin", "ffmpeg.exe"),
         os.path.join(root_dir, "ffmpeg.exe"),
         os.path.join(root_dir, "bin", "ffmpeg"),
-        "/Users/harry/.gemini/antigravity/scratch/node_modules/ffmpeg-static/ffmpeg",
     ]
     if getattr(sys, "frozen", False):
         exe_dir = os.path.dirname(sys.executable)
@@ -83,65 +84,79 @@ DEFAULT_FFMPEG = resolve_ffmpeg_bin()
 FONT = resolve_font_path()
 
 
+def source_fingerprint(video_path):
+    path = os.path.normcase(os.path.realpath(video_path))
+    stat = os.stat(path)
+    return path, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
+
+
+def audio_cache_path(video_path, ffmpeg_bin=DEFAULT_FFMPEG):
+    identity = (*source_fingerprint(video_path), ffmpeg_bin, "mono-16k-pcm-v1")
+    key = hashlib.sha256(json.dumps(identity).encode("utf-8")).hexdigest()
+    return os.path.join(tempfile.gettempdir(), "badminton_audio_cache_v2", f"{key}.wav")
+
+
 def extract_audio_wav(video_path, wav_path, ffmpeg_bin=DEFAULT_FFMPEG):
-    os.makedirs(os.path.dirname(wav_path), exist_ok=True)
-    if os.path.exists(wav_path):
+    if os.path.isfile(wav_path) and os.path.getsize(wav_path) > 44:
         return wav_path
-    cmd = [
-        ffmpeg_bin, "-y",
-        "-threads", "0",
-        "-i", video_path,
-        "-vn", "-ar", "16000", "-ac", "1",
-        wav_path
-    ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    run_media_export(
+        ffmpeg_bin, ["-i", video_path, "-map", "0:a:0", "-vn", "-ar", "16000",
+                     "-ac", "1", "-c:a", "pcm_s16le"], wav_path
+    )
     return wav_path
 
 
 def get_video_duration(vpath, ffmpeg_bin=DEFAULT_FFMPEG):
-    cmd = [ffmpeg_bin, "-i", vpath]
-    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    cmd = [ffmpeg_bin, "-hide_banner", "-nostdin", "-i", vpath]
+    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
     for line in res.stderr.splitlines():
         if "Duration:" in line:
-            dur_str = line.split("Duration:")[1].split(",")[0].strip()
-            parts = dur_str.split(":")
-            return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+            parts = line.split("Duration:", 1)[1].split(",", 1)[0].strip().split(":")
+            if len(parts) == 3:
+                return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
     return 0.0
 
 
 def detect_hits(wav_path, th_val=5.0e6, ratio_th=3.0, soft_th=4.2e6, soft_ratio=20.0):
-    """
-    Tier 1 Acoustic Transient Detection (Dual-Contrast Calibration):
-    Extracts candidate shuttlecock impact moments from high-frequency energy diffs.
-    Calibrated for multi-court gymnasiums to suppress adjacent court bleed and sneaker squeaks
-    while faithfully preserving both standard strokes and high-contrast soft touches:
-      1. Standard gym strike: E >= th_val (default 5.0e6), ratio >= ratio_th (default 3.0)
-      2. High-contrast soft touch / net drop: E >= soft_th (default 4.2e6), ratio >= soft_ratio (default 20.0)
-    """
+    """Find candidate strikes from high-frequency acoustic transients."""
     with wave.open(wav_path, "rb") as w:
         sr = w.getframerate()
         raw = w.readframes(w.getnframes())
-    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
-
     win = int(sr * 0.010)
     hop = int(sr * 0.005)
-    diff = np.diff(samples)
-    sq = diff ** 2
-    cumsum = np.cumsum(np.insert(sq, 0, 0))
-    hf_energy = (cumsum[win::hop] - cumsum[:-win:hop]) / win
-    times = np.arange(len(hf_energy)) * hop / sr
+    if not hop or len(raw) // 2 <= win + 40 * hop:
+        return []
+
+    # Reuse the difference buffer for squares and the cumulative sum.
+    diff = np.diff(np.frombuffer(raw, dtype=np.int16).astype(np.float32))
+    del raw
+    np.square(diff, out=diff)
+    np.cumsum(diff, out=diff)
+    starts = np.arange(0, diff.size + 1 - win, hop)
+    hf_energy = diff[starts + win - 1]
+    hf_energy[1:] -= diff[starts[1:] - 1]
+    hf_energy /= win
+    del diff
+
+    # Only compute the background mean for local maxima that pass an energy threshold.
+    center = hf_energy[20:-20]
+    candidates = np.flatnonzero(
+        (center > hf_energy[19:-21]) & (center >= hf_energy[21:-19])
+        & (center >= min(th_val, soft_th))
+    ) + 20
 
     peaks = []
     last_t = -1.0
-    for idx in range(20, len(hf_energy) - 20):
+    for idx in candidates:
+        t = int(idx) * hop / sr
+        if t - last_t <= 0.35:
+            continue
         val = hf_energy[idx]
-        if val > hf_energy[idx - 1] and val >= hf_energy[idx + 1]:
-            bg = np.mean(hf_energy[max(0, idx - 40):max(1, idx - 10)])
-            ratio = val / (bg + 1e-5)
-            is_hit = (val >= th_val and ratio >= ratio_th) or (val >= soft_th and ratio >= soft_ratio)
-            if is_hit and times[idx] - last_t > 0.35:
-                peaks.append((times[idx], val))
-                last_t = times[idx]
+        bg = np.mean(hf_energy[max(0, idx - 40):idx - 10])
+        ratio = val / (bg + 1e-5)
+        if (val >= th_val and ratio >= ratio_th) or (val >= soft_th and ratio >= soft_ratio):
+            peaks.append((t, val))
+            last_t = t
     return peaks
 
 
@@ -272,7 +287,7 @@ def fast_camera_match_window(cap, fps, dur):
     return stable_start, unstable_end
 
 
-def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, stable_start=0.0, unstable_end=99999.0, vpath=None, min_hits=5):
+def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, stable_start=0.0, unstable_end=99999.0, vpath=None, min_hits=5, ffmpeg_bin=DEFAULT_FFMPEG):
     """
     True Badminton Play & Personnel Exit/Switch Verification (v1.4.9):
     - If hit_count < min_hits: reject immediately (short dead-ball tap clusters or adjacent court noise).
@@ -300,18 +315,20 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     if not HAS_CV2 and not (vpath and os.path.exists(vpath)):
         return True
 
+    ffmpeg_opts = {"ffmpeg_bin": ffmpeg_bin} if ffmpeg_bin != DEFAULT_FFMPEG else {}
+
     # 1. Opening serve & cadence verification (eliminates adjacent court rallies bleed during intermissions)
     if r_peaks and len(r_peaks) >= 3:
         g0 = r_peaks[1][0] - r_peaks[0][0]
         g1 = r_peaks[2][0] - r_peaks[1][0]
         if g0 < 0.55 and g1 < 0.55:
-            m_open = sample_instant_motion(cap, fps, r_peaks[0][0], vpath=vpath)
+            m_open = sample_instant_motion(cap, fps, r_peaks[0][0], vpath=vpath, **ffmpeg_opts)
             if m_open is not None and (m_open[1] < 3.0 or m_open[0] < 5.0):
                 return False
 
     # 2. Multilateral court engagement & camera stability check
     pts = np.linspace(s_cut + 0.15 * dur, e_cut - 0.15 * dur, 5)
-    motions = [sample_instant_motion(cap, fps, pt, vpath=vpath) for pt in pts]
+    motions = [sample_instant_motion(cap, fps, pt, vpath=vpath, **ffmpeg_opts) for pt in pts]
     motions = [m for m in motions if m is not None]
     if not motions:
         return True
@@ -682,28 +699,23 @@ def extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unst
     if cap is None or fps <= 0 or not peaks:
         return []
 
-    # Filter candidate kill moments strictly based on serve-strike sequence and subsequent silence
+    # The acoustic detector emits ordered peaks. Look up only neighboring events.
+    times = [p[0] for p in peaks]
     cand_items = []
-    for i in range(len(peaks)):
-        t_k = peaks[i][0]
-        # Must have serve hit 0.45s to 1.70s before t_k
-        serves = [p[0] for p in peaks if 0.45 <= (t_k - p[0]) <= 1.70]
-        if not serves:
+    for t_k, energy in peaks:
+        if energy < 7.5e6:
             continue
-        t_serve = serves[-1]
-
-        # Must have NO acoustic hit for at least 3.2s after t_k (rally must not continue!)
-        subsequent = [p[0] for p in peaks if 0.25 <= (p[0] - t_k) <= 3.20]
-        if subsequent:
+        serve_idx = bisect_right(times, -0.45, key=lambda t: t - t_k) - 1
+        if serve_idx < 0 or t_k - times[serve_idx] > 1.70:
             continue
-
-        # Must have NO acoustic hit between t_serve - 2.8s and t_serve - 0.5s (ready stance before serve)
-        pre_noise = [p[0] for p in peaks if 0.50 <= (t_serve - p[0]) <= 2.80]
-        if pre_noise:
+        t_serve = times[serve_idx]
+        subsequent = bisect_left(times, 0.25, key=lambda t: t - t_k)
+        if subsequent < len(times) and times[subsequent] - t_k <= 3.20:
             continue
-
-        if peaks[i][1] >= 7.5e6:
-            cand_items.append((t_serve, t_k))
+        pre_noise = bisect_left(times, -2.80, key=lambda t: t - t_serve)
+        if pre_noise < len(times) and t_serve - times[pre_noise] >= 0.50:
+            continue
+        cand_items.append((t_serve, t_k))
 
     if not cand_items:
         return []
@@ -767,28 +779,24 @@ def format_time_zh(t):
 
 
 def cut_lossless(ffmpeg_bin, vpath, s_cut, dur, out_path):
-    cmd = [
-        ffmpeg_bin, "-y",
-        "-ss", f"{s_cut:.2f}",
-        "-t", f"{dur:.2f}",
-        "-i", vpath,
-        "-c", "copy",
-        out_path
-    ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    run_media_export(
+        ffmpeg_bin, ["-ss", f"{s_cut:.6f}", "-t", f"{dur:.6f}", "-i", vpath, "-c", "copy"],
+        out_path,
+    )
+
+
+def cut_exact(ffmpeg_bin, vpath, s_cut, dur, out_path):
+    run_media_export(
+        ffmpeg_bin, ["-ss", f"{s_cut:.6f}", "-i", vpath, "-t", f"{dur:.6f}",
+                     "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264",
+                     "-preset", "veryfast", "-crf", "18", "-threads", "2",
+                     "-c:a", "aac", "-b:a", "192k"], out_path
+    )
 
 
 def concat_clips(ffmpeg_bin, clip_paths, out_reel_path):
-    if not clip_paths:
-        return
-    txt_path = out_reel_path + ".txt"
-    with open(txt_path, "w") as f:
-        for p in clip_paths:
-            f.write(f"file '{p}'\n")
-    cmd = [ffmpeg_bin, "-y", "-f", "concat", "-safe", "0", "-i", txt_path, "-c", "copy", out_reel_path]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-    if os.path.exists(txt_path):
-        os.remove(txt_path)
+    if clip_paths and not generate_condensed_reel(ffmpeg_bin, clip_paths, out_reel_path):
+        raise RuntimeError(f"找不到可用于拼接的片段: {out_reel_path}")
 
 
 def generate_gif(ffmpeg_bin, video_clip, out_gif, caption):
@@ -799,7 +807,7 @@ def generate_gif(ffmpeg_bin, video_clip, out_gif, caption):
         f"split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3"
     )
     cmd = [ffmpeg_bin, "-y", "-i", video_clip, "-vf", vf, "-r", "12", out_gif]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    run_media_export(ffmpeg_bin, cmd[2:-1], cmd[-1])
 
 
 def generate_slowmo_replay(ffmpeg_bin, clip_path, out_path, slow_factor=0.4):
@@ -820,17 +828,11 @@ def generate_slowmo_replay(ffmpeg_bin, clip_path, out_path, slow_factor=0.4):
         "-c:a", "aac", "-b:a", "192k",
         out_path
     ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    run_media_export(ffmpeg_bin, cmd[2:-1], cmd[-1])
 
 
 def generate_broadcast_hud(ffmpeg_bin, clip_path, verified_shots, out_path, title="实战纯净多拍对决", total_dur=None, ball_down_t=None):
-    """
-    BWF/Olympic Broadcast-Grade HUD Generator:
-    - Running match clock with 0.1s millisecond precision (00:SS.S)
-    - Dynamic tactical shot badge: [实战击球] 第 X 拍 / 全 N 拍 [技术动作识别]
-    - Point resolution finish banner: 【终结/落地】全 N 拍 纯净攻防终了
-    - Zero dead ball: freezes counter immediately when shuttlecock touches ground
-    """
+    """Render a timer and an estimated acoustic shot count."""
     if total_dur is None:
         total_dur = get_video_duration(clip_path, ffmpeg_bin)
 
@@ -846,22 +848,10 @@ def generate_broadcast_hud(ffmpeg_bin, clip_path, verified_shots, out_path, titl
         cs = int((sec - int(sec)) * 100)
         return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
-    # Standard badminton stroke cadence & heuristics
-    def infer_action(idx, total):
-        if idx == 0:
-            return "[发球抢攻]"
-        elif idx == 1:
-            return "[接发推底]"
-        elif idx == total - 1:
-            return "[突击重杀终结!]"
-        elif idx % 2 == 1:
-            return "[快速平抽分边]"
-        else:
-            return "[防守高远拉锯]"
-
-    ass_path = out_path + ".ass"
-    with open(ass_path, "w", encoding="utf-8") as f:
-        f.write(f"""[Script Info]
+    with tempfile.TemporaryDirectory(prefix="badminton-hud-") as staging:
+        ass_path = os.path.join(staging, "hud.ass")
+        with open(ass_path, "w", encoding="utf-8") as f:
+            f.write(f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1920
 PlayResY: 1080
@@ -876,509 +866,166 @@ Style: Timer, STHeiti, 38, &H00FFFFFF, &H00FFFFFF, &H00000000, &H90000000, 1, 0,
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """)
-        f.write(f"Dialogue: 0,{fmt_ass_time(0.0)},{fmt_ass_time(total_dur)},Title,,0,0,0,,🏸 转播级 HUD 打卡 · {title} (全{total_shots}拍·零死球)\\n\n")
+            f.write(f"Dialogue: 0,{fmt_ass_time(0.0)},{fmt_ass_time(total_dur)},Title,,0,0,0,,🏸 转播级 HUD 打卡 · {title} (估算 {total_shots} 拍)\\n\n")
 
-        first_hit_t = verified_shots[0][0] if verified_shots else 0.8
-        f.write(f"Dialogue: 1,{fmt_ass_time(0.0)},{fmt_ass_time(first_hit_t)},ShotBadge,,0,0,0,,[实战击球] 准备发球...\\n\n")
+            first_hit_t = verified_shots[0][0] if verified_shots else 0.8
+            f.write(f"Dialogue: 1,{fmt_ass_time(0.0)},{fmt_ass_time(first_hit_t)},ShotBadge,,0,0,0,,[实战击球] 准备发球...\\n\n")
 
-        for i, hit in enumerate(verified_shots):
-            s_t = hit[0]
-            e_t = verified_shots[i + 1][0] if i + 1 < len(verified_shots) else (ball_down_t if ball_down_t else total_dur)
-            action = infer_action(i, total_shots)
-            badge_text = f"第 {i + 1:02d} 拍 / 全 {total_shots} 拍  {action}"
-            f.write(f"Dialogue: 1,{fmt_ass_time(s_t)},{fmt_ass_time(e_t)},ShotBadge,,0,0,0,,[实战击球] {badge_text}\\n\n")
+            for i, hit in enumerate(verified_shots):
+                s_t = hit[0]
+                e_t = verified_shots[i + 1][0] if i + 1 < len(verified_shots) else (ball_down_t if ball_down_t else total_dur)
+                badge_text = f"估算第 {i + 1:02d} 拍 / {total_shots} 拍"
+                f.write(f"Dialogue: 1,{fmt_ass_time(s_t)},{fmt_ass_time(e_t)},ShotBadge,,0,0,0,,[实战击球] {badge_text}\\n\n")
 
-        if ball_down_t and ball_down_t < total_dur:
-            end_banner = f"【终结得分·球落地】全 {total_shots} 拍 纯净攻防终了"
-            f.write(f"Dialogue: 1,{fmt_ass_time(ball_down_t)},{fmt_ass_time(total_dur)},ShotBadge,,0,0,0,,{end_banner}\\n\n")
+            if ball_down_t and ball_down_t < total_dur:
+                end_banner = f"回合尾段 · 估算 {total_shots} 拍"
+                f.write(f"Dialogue: 1,{fmt_ass_time(ball_down_t)},{fmt_ass_time(total_dur)},ShotBadge,,0,0,0,,{end_banner}\\n\n")
 
-        # Running millisecond timer (0.1s increments)
-        step = 0.1
-        cur = 0.0
-        dur_s = int(total_dur)
-        dur_ms = int((total_dur - dur_s) * 10)
-        while cur < total_dur:
-            nxt = min(total_dur, cur + step)
-            cur_s = int(cur)
-            cur_ms = int((cur - cur_s) * 10)
+            # Running millisecond timer (0.1s increments)
+            step = 0.1
+            cur = 0.0
+            dur_s = int(total_dur)
+            dur_ms = int((total_dur - dur_s) * 10)
+            while cur < total_dur:
+                nxt = min(total_dur, cur + step)
+                cur_s = int(cur)
+                cur_ms = int((cur - cur_s) * 10)
 
-            cur_shot = 0
-            if verified_shots:
-                for i, hit in enumerate(verified_shots):
-                    next_t = verified_shots[i + 1][0] if i + 1 < len(verified_shots) else ball_down_t
-                    if hit[0] <= cur < next_t:
-                        cur_shot = i + 1
-                        break
-                if ball_down_t and cur >= ball_down_t:
-                    cur_shot = total_shots
+                cur_shot = 0
+                if verified_shots:
+                    for i, hit in enumerate(verified_shots):
+                        next_t = verified_shots[i + 1][0] if i + 1 < len(verified_shots) else ball_down_t
+                        if hit[0] <= cur < next_t:
+                            cur_shot = i + 1
+                            break
+                    if ball_down_t and cur >= ball_down_t:
+                        cur_shot = total_shots
 
-            timer_text = f"⏱️ 实时对决: 00:{cur_s:02d}.{cur_ms}  /  00:{dur_s:02d}.{dur_ms}   [当前第 {cur_shot}/{total_shots} 拍]"
-            f.write(f"Dialogue: 2,{fmt_ass_time(cur)},{fmt_ass_time(nxt)},Timer,,0,0,0,,{timer_text}\\n\n")
-            cur = nxt
+                timer_text = f"⏱️ 实时对决: 00:{cur_s:02d}.{cur_ms}  /  00:{dur_s:02d}.{dur_ms}   [当前第 {cur_shot}/{total_shots} 拍]"
+                f.write(f"Dialogue: 2,{fmt_ass_time(cur)},{fmt_ass_time(nxt)},Timer,,0,0,0,,{timer_text}\\n\n")
+                cur = nxt
 
-    cmd = [
-        ffmpeg_bin, "-y",
-        "-i", clip_path,
-        "-vf", f"ass={ass_path}",
-        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-        "-c:a", "copy",
-        out_path
-    ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-    if os.path.exists(ass_path):
-        os.remove(ass_path)
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-i", os.path.abspath(clip_path),
+            "-vf", "ass=hud.ass",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-c:a", "copy",
+            out_path
+        ]
+        run_media_export(ffmpeg_bin, cmd[2:-1], cmd[-1], cwd=staging)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Badminton Match Video Auto-Cutter & Highlight Extractor")
+    parser = argparse.ArgumentParser(description="羽毛球比赛视频自动剪辑与回合时间轴")
     parser.add_argument("--version", "-v", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("--input", "-i", required=True, help="Input video file or directory of match videos")
-    parser.add_argument("--output", "-o", required=True, help="Output root directory")
+    parser.add_argument("--input", "-i", required=True, help="比赛视频文件或视频目录")
+    parser.add_argument("--output", "-o", required=True, help="输出目录")
     parser.add_argument(
-        "--mode",
+        "--mode", default="all",
         choices=["all", "highlight", "duopai", "serve_kill", "condensed", "vertical", "solo", "showcase"],
-        default="all",
-        help="Extraction mode: all/highlight (默认多拍+秒杀), condensed (比赛浓缩纯享), vertical (9:16竖屏短视频), solo (个人主角光环), showcase (战术风格分类集锦)"
+        help="默认 all 为多拍和接发秒杀候选，condensed 为多拍纯享",
     )
-    parser.add_argument("--player", choices=["near_left", "near_right", "far_left", "far_right", "auto"], default="near_left", help="Target player quadrant for --mode solo (default: near_left)")
-    parser.add_argument("--aspect-ratio", choices=["9:16", "1:1", "16:9"], default="9:16", help="Target aspect ratio for --mode vertical (default: 9:16)")
-    parser.add_argument("--reel", action="store_true", default=False, help="Generate concatenated multi-shot & serve-kill highlight reels (默认关闭，仅在明确指定 --reel 时才生成整场大合集/跨场大合集，节省剪辑耗时与磁盘空间)")
-    parser.add_argument("--gif", action="store_true", help="Generate lightweight WeChat stickers/GIFs")
-    parser.add_argument("--slowmo", action="store_true", help="Generate broadcast-grade 0.4x slow motion replays")
-    parser.add_argument("--hud", action="store_true", help="Generate on-screen verified shot counter HUD for top rallies")
-    parser.add_argument("--strict-visual", action="store_true", default=True, help="Enforce visual dead-ball motion drop truncation")
-    parser.add_argument("--split-by-game", dest="split_by_game", action="store_true", default=True, help="Automatically group rallies into game subfolders by player ReID (default: True)")
-    parser.add_argument("--no-split-by-game", dest="split_by_game", action="store_false", help="Disable game grouping and output all rallies in a flat directory")
-    parser.add_argument("--min-hits", type=int, default=5, help="Minimum verified stroke count for multi-shot rallies (default: 5)")
-    parser.add_argument("--lineup-threshold", type=float, default=0.65, help="Similarity threshold for detecting player lineup substitution (default: 0.65)")
-    parser.add_argument("--rest-gap", type=float, default=22.0, help="Minimum rest gap in seconds for detecting player rotation (default: 22.0)")
-    parser.add_argument("--long-intermission", type=float, default=45.0, help="Physical rest intermission threshold in seconds to trigger game split (default: 45.0)")
-    parser.add_argument("--min-rallies-per-game", type=int, default=8, help="Minimum rallies required for a distinct game before merging (default: 8)")
-    parser.add_argument("--ffmpeg", default=DEFAULT_FFMPEG, help="Path to ffmpeg executable")
+    parser.add_argument("--player", choices=[*PLAYER_QUADRANTS, "auto"], default="near_left",
+                        help="solo 筛选已标注站位，auto 保留所有已标注的回合")
+    parser.add_argument("--aspect-ratio", choices=["9:16", "1:1", "16:9"], default="9:16")
+    parser.add_argument("--reel", action="store_true", help="额外生成合集")
+    parser.add_argument("--gif", action="store_true", help="输出接发秒杀候选 GIF")
+    parser.add_argument("--slowmo", action="store_true", help="输出慢动作回放")
+    parser.add_argument("--hud", action="store_true", help="输出带估算拍数的 HUD")
+    parser.add_argument("--strict-visual", action="store_true", default=True, help="启用视觉验证（默认）")
+    parser.add_argument("--split-by-game", dest="split_by_game", action="store_true", default=True)
+    parser.add_argument("--no-split-by-game", dest="split_by_game", action="store_false")
+    parser.add_argument("--min-hits", type=int, default=5)
+    parser.add_argument("--min-duration", type=float, default=5.0)
+    parser.add_argument("--lineup-threshold", type=float, default=0.65)
+    parser.add_argument("--rest-gap", type=float, default=22.0)
+    parser.add_argument("--long-intermission", type=float, default=45.0)
+    parser.add_argument("--min-rallies-per-game", type=int, default=8)
+    parser.add_argument("--ffmpeg", default=DEFAULT_FFMPEG, help="FFmpeg 路径，亦可设置 BADMINTON_FFMPEG")
+    parser.add_argument("--exact", action="store_true", help="帧级精剪，重新编码")
+    parser.add_argument("--jobs", type=int, help="导出并发数（流复制默认 8，精剪默认 2）")
+    operation = parser.add_mutually_exclusive_group()
+    operation.add_argument("--analyze-only", action="store_true", help="仅输出回合时间轴 JSON")
+    operation.add_argument("--timeline", help="按现有或人工编辑的时间轴导出，仅接受单个源视频")
+    parser.add_argument("--rescan", action="store_true", help="跳过时间轴缓存，重新分析")
     args = parser.parse_args()
+    if args.jobs is not None and not 1 <= args.jobs <= 32:
+        parser.error("--jobs 必须介于 1 和 32")
+    if (args.min_hits < 1 or not math.isfinite(args.min_duration)
+            or args.min_duration <= 0 or args.min_rallies_per_game < 1):
+        parser.error("拍数和时长必须是有限的正值")
+    if not shutil.which(args.ffmpeg):
+        parser.error("找不到 FFmpeg，请设置 --ffmpeg 或 BADMINTON_FFMPEG")
+    if not HAS_CV2 and not args.timeline:
+        parser.error("自动分析需要 OpenCV，请安装 opencv-python-headless")
 
-    os.makedirs(args.output, exist_ok=True)
-    temp_audio_dir = os.path.join(tempfile.gettempdir(), "badminton_audio_cache")
-    os.makedirs(temp_audio_dir, exist_ok=True)
-
-    videos = []
-    if os.path.isdir(args.input):
-        for f in sorted(os.listdir(args.input)):
-            if f.endswith((".mp4", ".mov", ".mkv", ".ts")):
-                videos.append(os.path.join(args.input, f))
+    source = os.path.abspath(args.input)
+    if os.path.isdir(source):
+        if args.timeline:
+            parser.error("--timeline 需要单个源视频")
+        videos = [os.path.join(source, name) for name in sorted(os.listdir(source))
+                  if name.lower().endswith(VIDEO_EXTENSIONS) and os.path.isfile(os.path.join(source, name))]
     else:
-        videos.append(args.input)
+        videos = [source] if os.path.isfile(source) and source.lower().endswith(VIDEO_EXTENSIONS) else []
+    if not videos:
+        parser.error("未找到可读的视频文件，支持 MP4、MOV、MKV 和 TS")
 
-    print(f"🎬 Loaded {len(videos)} video file(s) for processing.")
-
-    match_mapping = {
-        "VID_20261019_201713_046": "01_场次一_双打实战_201713",
-        "VID_20261019_204324_047": "02_场次二_双打实战_204324",
-        "VID_20261019_205459_048": "03_场次三_双打实战_205459",
-        "VID_20261019_220708_049": "04_场次四_双打实战_220708",
-        "VID_20261019_223559_050": "05_场次五_双打实战_223559",
-        "VID_20261029_203442_050": "01_场次一_双打实战_050",
-        "VID_20261029_203442_051": "02_场次二_双打实战_051",
-        "VID_20261029_203442_052": "03_场次三_双打实战_052",
-        "VID_20261102_215941_046": "01_场次一_双打实战_046",
-        "VID_20261102_215941_047": "02_场次二_双打实战_047",
-        "VID_20261102_215941_048": "03_场次三_双打实战_048",
-    }
-    zh_nums = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
-
-    all_grand_rallies = []
-    all_grand_kills = []
-    processed_match_dirs = []
-
-    for idx, vpath in enumerate(videos, 1):
-        vname = os.path.splitext(os.path.basename(vpath))[0]
-        sz = os.path.getsize(vpath) if os.path.exists(vpath) else 0
-        if sz == 0:
-            print(f"\n[{idx}/{len(videos)}] ⏳ Skipping empty/uploading video: {vname} (0 bytes, upload in progress)")
-            continue
-        v_dur = get_video_duration(vpath, args.ffmpeg)
-        if v_dur <= 1.0:
-            print(f"\n[{idx}/{len(videos)}] ⚠️ Skipping incomplete video: {vname} (moov atom not found / still uploading)")
-            continue
-        if vname in match_mapping:
-            folder_name = match_mapping[vname]
-        else:
-            zh_idx = zh_nums[idx - 1] if idx <= len(zh_nums) else str(idx)
-            parts = vname.split("_")
-            suffix = parts[-1] if len(parts) >= 2 else vname
-            folder_name = f"{idx:02d}_场次{zh_idx}_双打实战_{suffix}"
-        display_name = folder_name.split("_", 1)[1] if "_" in folder_name else vname
-        match_dir = os.path.join(args.output, folder_name)
-        os.makedirs(match_dir, exist_ok=True)
-        processed_match_dirs.append(match_dir)
-
-        t_match_start = time.time()
-        v_dur = get_video_duration(vpath, args.ffmpeg)
-        wav_path = os.path.join(temp_audio_dir, f"{vname}.wav")
-        print(f"\n[{idx}/{len(videos)}] Processing: {display_name} ({vname}, {v_dur:.1f}s)")
-        extract_audio_wav(vpath, wav_path, args.ffmpeg)
-        peaks = detect_hits(wav_path)
-
-        cap = None
-        fps = 0.0
-        if (args.strict_visual or True) and HAS_CV2:
-            cap = cv2.VideoCapture(vpath)
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            _MOTION_CACHE.clear()
-
+    # Imported here so the shared engine can also import the detection helpers.
+    from gui_engine import (
+        CutterConfig, analyze_video_file, export_batch_timelines, load_timeline_json,
+        resolve_match_folder_name, save_timeline_json,
+    )
+    config = CutterConfig(
+        ffmpeg_bin=args.ffmpeg, modes=[args.mode], player=args.player, aspect_ratio=args.aspect_ratio,
+        split_by_game=args.split_by_game, reel=args.reel, hud=args.hud, slowmo=args.slowmo, gif=args.gif,
+        strict_visual=args.strict_visual, min_hits=args.min_hits, min_duration=args.min_duration,
+        lineup_threshold=args.lineup_threshold, rest_gap=args.rest_gap, long_intermission=args.long_intermission,
+        min_rallies_per_game=args.min_rallies_per_game, exact=args.exact, jobs=args.jobs,
+    )
+    started = time.monotonic()
+    timelines = []
+    errors = []
+    for idx, path in enumerate(videos, 1):
         try:
-            # 1. Automatic Camera Match Window Benchmarking (Excludes handheld mount/unmount noise)
-            stable_start, unstable_end = fast_camera_match_window(cap, fps, v_dur)
-            raw_peak_count = len(peaks)
-            peaks = [p for p in peaks if stable_start <= p[0] <= unstable_end]
-            filtered_out = raw_peak_count - len(peaks)
-            print(f"  📷 机位实战时间窗: {stable_start:.1f}s ~ {unstable_end:.1f}s (排除开机固定/散场关机杂音 {filtered_out} 处，保留实战击球 {len(peaks)} 次)")
-
-            if args.mode in ["all", "highlight", "duopai", "condensed", "vertical", "solo", "showcase"]:
-                rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=args.min_hits, cap=cap, fps=fps, vpath=vpath)
-                print(f"  🏸 Found {len(rallies)} raw candidate rallies")
-
-                valid_rallies = []
-                for r in rallies:
-                    s_cut = r["s_cut"]
-                    e_cut = r["e_cut"]
-                    r_peaks = r["peaks"]
-
-                    # Boundary verification against camera match window
-                    if s_cut < stable_start or e_cut > unstable_end:
-                        continue
-
-                    # Strict Visual Play Verification (no handheld shake, active court players)
-                    if args.strict_visual:
-                        if not check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=r_peaks, stable_start=stable_start, unstable_end=unstable_end, vpath=vpath, min_hits=args.min_hits):
-                            print(f"    🚫 [过滤非打球] 跳过片段: {format_time_zh(s_cut)}至{format_time_zh(e_cut)} (机位未固定或非攻防对战)")
-                            continue
-
-                    # Apply high-speed visual dead-ball motion cutoff if enabled
-                    if args.strict_visual:
-                        e_cut, r_peaks = detect_visual_deadball_cutoff(vpath, s_cut, e_cut, r_peaks, cap=cap, fps=fps)
-
-                    dur = e_cut - s_cut
-                    if dur < 5.0 or len(r_peaks) < args.min_hits:
-                        continue
-
-                    # Inter-rally reset turnaround & cleaved rally healing (v1.4.9)
-                    if valid_rallies:
-                        prev_r = valid_rallies[-1]
-                        turnaround = s_cut - prev_r["e_cut"]
-                        hit_gap = r_peaks[0][0] - prev_r["peaks"][-1][0]
-                        # Inter-rally reset turnaround & cleaved rally healing (v1.5.0)
-                        if turnaround < 0.60 and hit_gap <= 1.15 and prev_r["dur"] < 25.0 and dur < 25.0:
-                            prev_r["e_cut"] = e_cut
-                            prev_r["dur"] = prev_r["e_cut"] - prev_r["s_cut"]
-                            prev_r["peaks"].extend(r_peaks)
-                            print(f"    🏸 [拼接微隙多拍] 拼接被轻微切断的连贯回合: 新区间 {format_time_zh(prev_r['s_cut'])}至{format_time_zh(prev_r['e_cut'])} ({prev_r['dur']:.1f}s)")
-                            continue
-                        elif turnaround < 0.30 and hit_gap < 1.80:
-                            print(f"    🚫 [过滤分间杂音] 跳过分间捡球/换球片段: {format_time_zh(s_cut)}至{format_time_zh(e_cut)} (距上一分仅 {turnaround:.2f}s)")
-                            continue
-
-                    valid_rallies.append({
-                        "s_cut": s_cut,
-                        "e_cut": e_cut,
-                        "dur": dur,
-                        "peaks": r_peaks
-                    })
-
-                if args.mode == "solo":
-                    valid_rallies = filter_solo_rallies(valid_rallies, target_player=args.player)
-                    print(f"  🌟 [主角光环模式] Filtered {len(valid_rallies)} rallies for player [{args.player}]")
-
-                if args.mode == "showcase":
-                    showcase_cats = categorize_showcase_rallies(valid_rallies)
-                    print(f"  💥 [风格分类集锦模式] Categorized into Smash/Marathon/Drive styles")
-
-                cut_tasks = []
-                all_game_dirs = []
-
-                if args.split_by_game and len(valid_rallies) > 1:
-                    print(f"  🏸 Analyzing player lineup ReID for {len(valid_rallies)} rallies...")
-                    def _extract_one_emb(task):
-                        idx, s_cut = task
-                        try:
-                            frame = extract_serve_keyframe(vpath, s_cut, ffmpeg_bin=args.ffmpeg)
-                            embs = extract_court_player_embeddings(frame, num_players=4)
-                        except Exception:
-                            embs = [np.zeros(512, dtype=np.float32) for _ in range(4)]
-                        return idx, embs
-
-                    tasks = [(i, vr["s_cut"]) for i, vr in enumerate(valid_rallies)]
-                    with ThreadPoolExecutor(max_workers=8) as executor:
-                        emb_results = list(executor.map(_extract_one_emb, tasks))
-                    emb_results.sort(key=lambda x: x[0])
-                    embeddings_list = [r[1] for r in emb_results]
-
-                    partition_input = [
-                        {"index": i, "start_time": vr["s_cut"], "end_time": vr["e_cut"], "data": vr}
-                        for i, vr in enumerate(valid_rallies)
-                    ]
-                    game_groups = partition_rallies_by_game(
-                        partition_input,
-                        embeddings_list,
-                        threshold=args.lineup_threshold,
-                        rest_gap_seconds=args.rest_gap,
-                        long_intermission_seconds=args.long_intermission,
-                        min_rallies_per_game=args.min_rallies_per_game
-                    )
-                    print(f"  🏆 Identified {len(game_groups)} distinct game(s) in match based on player lineups.")
-
-                    summary_lines = [
-                        "=" * 60,
-                        "🏸 羽毛球实战视频全自动分局与球员重识别报告 (Match Summary)",
-                        "=" * 60,
-                        f"视频源文件: {os.path.basename(vpath)}",
-                        f"识别总多拍: {len(valid_rallies)} 处",
-                        f"划分球局数: {len(game_groups)} 局",
-                        "-" * 60
-                    ]
-
-                    for g_idx, g_items in enumerate(game_groups, 1):
-                        g_rallies = [item["data"] for item in g_items]
-                        g_start = g_rallies[0]["s_cut"]
-                        g_end = g_rallies[-1]["e_cut"]
-                        g_dur = g_end - g_start
-                        g_dir_name = f"第{g_idx:02d}局_实战对阵_{len(g_rallies)}拍"
-                        g_dir_path = os.path.join(match_dir, g_dir_name)
-                        os.makedirs(g_dir_path, exist_ok=True)
-                        all_game_dirs.append((g_dir_path, g_idx, len(g_rallies)))
-
-                        summary_lines.append(
-                            f"第{g_idx:02d}局 (共 {len(g_rallies):02d} 拍):\n"
-                            f"  时间跨度: {format_time_zh(g_start)} 至 {format_time_zh(g_end)} (比赛时长: {int(g_dur//60)}分{int(round(g_dur%60))}秒)\n"
-                            f"  多拍序号: 多拍01 ~ 多拍{len(g_rallies):02d}\n"
-                            f"  保存目录: {g_dir_name}/\n"
-                        )
-
-                        gpad = 2 if len(g_rallies) < 100 else 3
-                        for r_idx, vr in enumerate(g_rallies, 1):
-                            dur = vr["dur"]
-                            label = "【超长高能拉锯】" if dur >= 15.0 else "【多拍激烈对攻】"
-                            name = f"多拍{r_idx:0{gpad}d}_{format_time_zh(vr['s_cut'])}至{format_time_zh(vr['e_cut'])}_{label}_{int(round(dur))}秒.mp4"
-                            clip_p = os.path.join(g_dir_path, name)
-                            cut_tasks.append((r_idx, vr["s_cut"], dur, clip_p, dur >= 15.0, g_dir_path))
-
-                    summary_lines.append("=" * 60)
-                    summary_path = os.path.join(match_dir, "game_summary.txt")
-                    with open(summary_path, "w", encoding="utf-8") as f_sum:
-                        f_sum.write("\n".join(summary_lines) + "\n")
-                    print(f"  📝 Game summary saved to: {summary_path}")
-
-                else:
-                    pad = 2 if len(valid_rallies) < 100 else 3
-                    for r_idx, vr in enumerate(valid_rallies, 1):
-                        dur = vr["dur"]
-                        label = "【超长高能拉锯】" if dur >= 15.0 else "【多拍激烈对攻】"
-                        name = f"多拍{r_idx:0{pad}d}_{format_time_zh(vr['s_cut'])}至{format_time_zh(vr['e_cut'])}_{label}_{int(round(dur))}秒.mp4"
-                        clip_p = os.path.join(match_dir, name)
-                        cut_tasks.append((r_idx, vr["s_cut"], dur, clip_p, dur >= 15.0, match_dir))
-
-                # Ultra-fast parallel lossless stream cutting (-c copy)
-                print(f"  ⚡ Parallel stream cutting {len(cut_tasks)} clean multi-shot clips...")
-                clip_paths = []
-                dir_to_clips = {}
-                if cut_tasks:
-                    def _do_cut(task):
-                        c_idx, s, d, out, is_long, pdir = task
-                        cut_lossless(args.ffmpeg, vpath, s, d, out)
-                        return c_idx, out, is_long, pdir
-
-                    with ThreadPoolExecutor(max_workers=8) as executor:
-                        results = list(executor.map(_do_cut, cut_tasks))
-                        results.sort(key=lambda x: x[0])
-                        clip_paths = [r[1] for r in results]
-                        for r in results:
-                            pdir = r[3]
-                            if pdir not in dir_to_clips:
-                                dir_to_clips[pdir] = []
-                            dir_to_clips[pdir].append(r[1])
-                            if r[2]:
-                                all_grand_rallies.append(r[1])
-
-                if clip_paths:
-                    if args.reel:
-                        if all_game_dirs:
-                            for g_dir_path, g_idx, g_count in all_game_dirs:
-                                g_clips = dir_to_clips.get(g_dir_path, [])
-                                if g_clips:
-                                    reel_name = f"00_【第{g_idx:02d}局_纯多拍合集】_全{len(g_clips)}段精选版.mp4"
-                                    concat_clips(args.ffmpeg, g_clips, os.path.join(g_dir_path, reel_name))
-                                    print(f"  🎞️ Created game {g_idx} reel: {reel_name}")
-                        else:
-                            reel_name = f"00_【{display_name}_纯多拍零死球合集】_全{len(clip_paths)}段精选版.mp4"
-                            concat_clips(args.ffmpeg, clip_paths, os.path.join(match_dir, reel_name))
-                            print(f"  🎞️ Created multi-shot reel: {reel_name}")
-                    else:
-                        print(f"  💡 跳过多拍大合集拼接（已保存 {len(clip_paths)} 段独立高质量切片，极速节省空间。如需大合集请添加 --reel 参数）")
-
-                if args.hud:
-                    hud_dir = os.path.join(match_dir, "转播级HUD特效")
-                    os.makedirs(hud_dir, exist_ok=True)
-                    for h_idx, clip_p in enumerate(clip_paths[:3], 1):
-                        hud_name = f"HUD_{os.path.basename(clip_p)}"
-                        hud_out = os.path.join(hud_dir, hud_name)
-                        dur = get_video_duration(clip_p, args.ffmpeg)
-                        # Extract audio peaks for clip
-                        clip_wav = os.path.join(tempfile.gettempdir(), f"{os.path.basename(clip_p)}.wav")
-                        extract_audio_wav(clip_p, clip_wav, args.ffmpeg)
-                        c_peaks = detect_hits(clip_wav, th_val=5.0e6)
-                        verified = verify_multimodal_shots(c_peaks)
-                        if len(verified) >= 3:
-                            print(f"    🏸 Generating Broadcast HUD for {os.path.basename(clip_p)} ({len(verified)} verified shots)...")
-                            generate_broadcast_hud(args.ffmpeg, clip_p, verified, hud_out, title=f"焦点拉锯_{int(round(dur))}秒", total_dur=dur)
-                        if os.path.exists(clip_wav):
-                            os.remove(clip_wav)
-
-                # Mode-specific post-processing
-                if args.mode == "condensed":
-                    print(f"  ⏱️ [比赛浓缩纯享模式] Generating seamless continuous match reel...")
-                    if all_game_dirs:
-                        for g_dir_path, g_idx, g_count in all_game_dirs:
-                            g_clips = dir_to_clips.get(g_dir_path, [])
-                            if g_clips:
-                                c_name = f"00_【第{g_idx:02d}局_比赛浓缩纯享】_全{len(g_clips)}段连贯版.mp4"
-                                generate_condensed_reel(args.ffmpeg, g_clips, os.path.join(g_dir_path, c_name))
-                                print(f"    🎞️ Generated game {g_idx} condensed reel: {c_name}")
-                    else:
-                        c_name = f"00_【{display_name}_比赛浓缩纯享】_全{len(clip_paths)}段连贯版.mp4"
-                        generate_condensed_reel(args.ffmpeg, clip_paths, os.path.join(match_dir, c_name))
-                        print(f"    🎞️ Generated match condensed reel: {c_name}")
-
-                elif args.mode == "vertical":
-                    vert_dir = os.path.join(match_dir, "竖屏9比16自媒体短视频")
-                    os.makedirs(vert_dir, exist_ok=True)
-                    print(f"  📱 [9:16竖屏短视频模式] Converting top clips to mobile vertical video...")
-                    for v_idx, c_path in enumerate(clip_paths[:5], 1):
-                        v_name = f"竖屏_{os.path.basename(c_path)}"
-                        v_out = os.path.join(vert_dir, v_name)
-                        generate_vertical_clip(args.ffmpeg, c_path, v_out, aspect_ratio=args.aspect_ratio)
-                    print(f"    📱 Saved vertical clips to: {vert_dir}")
-
-                elif args.mode == "showcase":
-                    showcase_dir = os.path.join(match_dir, "战术风格分类集锦")
-                    os.makedirs(showcase_dir, exist_ok=True)
-                    for cat_name, cat_rallies in showcase_cats.items():
-                        if not cat_rallies:
-                            continue
-                        cat_sub = os.path.join(showcase_dir, cat_name)
-                        os.makedirs(cat_sub, exist_ok=True)
-                        cat_clip_paths = []
-                        for cr in cat_rallies:
-                            for cp in clip_paths:
-                                if f"_{format_time_zh(cr['s_cut'])}至" in cp:
-                                    cat_clip_paths.append(cp)
-                                    break
-                        if cat_clip_paths:
-                            c_reel = f"00_【{cat_name}】_全{len(cat_clip_paths)}段大合集.mp4"
-                            generate_condensed_reel(args.ffmpeg, cat_clip_paths, os.path.join(cat_sub, c_reel))
-                    print(f"    💥 Showcase style albums saved to: {showcase_dir}")
-
-            if args.mode in ["serve_kill", "all", "highlight"]:
-                # Ensure multi-shot rallies are present for gap boundary benchmarking
-                if "rallies" not in locals():
-                    rallies = extract_multi_shot_rallies(peaks, v_dur, min_hits=args.min_hits, cap=cap, fps=fps, vpath=vpath)
-                kills = extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur)
-                print(f"  ⚡ Found {len(kills)} verified serve-and-kill moments")
-                kill_dir = os.path.join(match_dir, "接发秒杀一拍定死")
-                if kills:
-                    os.makedirs(kill_dir, exist_ok=True)
-                kpad = 2 if len(kills) < 100 else 3
-
-                kill_tasks = []
-                for valid_k_idx, k in enumerate(kills, 1):
-                    dur = k["e_cut"] - k["s_cut"]
-                    label = "【接发突击一拍定死】" if k.get("surge", 0) >= 2.4 else "【发球被一拍定死】"
-                    kname = f"秒杀{valid_k_idx:0{kpad}d}_{format_time_zh(k['s_cut'])}至{format_time_zh(k['e_cut'])}_{label}_{int(round(dur))}秒.mp4"
-                    kclip_p = os.path.join(kill_dir, kname)
-                    kill_tasks.append((valid_k_idx, k["s_cut"], dur, kclip_p))
-
-                # Ultra-fast parallel lossless stream cutting for serve kills
-                kill_clips = []
-                if kill_tasks:
-                    def _do_kill_cut(task):
-                        k_idx, s, d, out = task
-                        cut_lossless(args.ffmpeg, vpath, s, d, out)
-                        return k_idx, out
-
-                    with ThreadPoolExecutor(max_workers=8) as executor:
-                        k_results = list(executor.map(_do_kill_cut, kill_tasks))
-                        k_results.sort(key=lambda x: x[0])
-                        kill_clips = [r[1] for r in k_results]
-                        all_grand_kills.extend(kill_clips)
-
-                    if args.gif:
-                        for k_idx, kclip_p in enumerate(kill_clips[:5], 1):
-                            gif_path = os.path.join(kill_dir, f"表情包_{k_idx:02d}.gif")
-                            generate_gif(args.ffmpeg, kclip_p, gif_path, "发球被一拍定死")
-
-                    if args.slowmo and kill_clips:
-                        slowmo_path = os.path.join(kill_dir, f"慢动作回放_01.mp4")
-                        generate_slowmo_replay(args.ffmpeg, kill_clips[0], slowmo_path)
-
-                if kill_clips:
-                    if args.reel:
-                        kill_reel_name = f"00_【{display_name}_发球被一拍定死合集】_全{len(kills)}个名场面.mp4"
-                        concat_clips(args.ffmpeg, kill_clips, os.path.join(kill_dir, kill_reel_name))
-                        print(f"  🎞️ Created serve-kill reel: {kill_reel_name}")
-                    else:
-                        print(f"  💡 跳过单场发球被秒杀合集拼接（已保存 {len(kill_clips)} 段独立秒杀名场面，极速输出。如需合集请添加 --reel）")
-
-        finally:
-            if cap is not None:
-                cap.release()
-
-        elapsed = time.time() - t_match_start
-        print(f"✨ Match [{display_name}] processing completed in {elapsed:.2f}s!")
-
-    # Grand Cross-Match Reel Generation
-    if args.reel:
-        if all_grand_rallies:
-            grand_reel_name = "00_【全场巅峰超长多拍TOP大集锦】_纯净原画零死球无字幕版.mp4"
-            grand_reel_path = os.path.join(args.output, grand_reel_name)
-            print(f"\n🌟 Compiling Grand Cross-Match Top Rallies ({len(all_grand_rallies)} rallies >= 15s)...")
-            concat_clips(args.ffmpeg, all_grand_rallies, grand_reel_path)
-            print(f"🎬 Grand Top Rallies compilation created: {grand_reel_path}")
-
-        if all_grand_kills:
-            grand_kill_dir = os.path.join(args.output, "00_特别精选_发球被一拍定死大赏")
-            os.makedirs(grand_kill_dir, exist_ok=True)
-            grand_kill_reel_name = "00_【发球被一拍定死_接发秒杀连贯大赏】_全场纯净原画版.mp4"
-            grand_kill_path = os.path.join(grand_kill_dir, grand_kill_reel_name)
-            print(f"\n⚡ Compiling Grand Cross-Match Serve-Kills ({len(all_grand_kills)} moments)...")
-            concat_clips(args.ffmpeg, all_grand_kills, grand_kill_path)
-            print(f"🎬 Grand Serve-Kill compilation created: {grand_kill_path}")
-    else:
-        print(f"\n💡 跳过跨场大集锦拼接（默认极速模式，零冗余磁盘占用。如需生成跨场TOP总集请添加 --reel 参数）")
-
-    if all_grand_kills:
-        grand_kill_dir = os.path.join(args.output, "00_特别精选_发球被一拍定死大赏")
-        os.makedirs(grand_kill_dir, exist_ok=True)
-        # Populate grand_kill_dir with clips and WeChat GIFs
-        gif_dest_dir = os.path.join(grand_kill_dir, "微信表情包GIF")
-        os.makedirs(gif_dest_dir, exist_ok=True)
-        for g_idx, kclip in enumerate(all_grand_kills, 1):
-            base_k = os.path.basename(kclip)
-            dest_k = os.path.join(grand_kill_dir, f"全场秒杀{g_idx:02d}_{base_k}")
-            if not os.path.exists(dest_k):
-                try:
-                    os.link(kclip, dest_k)
-                except OSError:
-                    shutil.copy2(kclip, dest_k)
-
-        for m_dir in processed_match_dirs:
-            m_kill_dir = os.path.join(m_dir, "接发秒杀一拍定死")
-            if os.path.exists(m_kill_dir):
-                for f in os.listdir(m_kill_dir):
-                    if f.endswith(".gif"):
-                        dest_gif = os.path.join(gif_dest_dir, f"{os.path.basename(m_dir)}_{f}")
-                        shutil.copy2(os.path.join(m_kill_dir, f), dest_gif)
-
-    print("\n🎉 All processing completed successfully!")
+            if args.timeline:
+                timeline = load_timeline_json(args.timeline)
+                if timeline is None:
+                    raise ValueError("时间轴 JSON 不可读")
+                if timeline.source_identity and timeline.source_identity != list(source_fingerprint(path)):
+                    raise ValueError("时间轴与当前源文件不匹配，请重新分析")
+                if not timeline.source_identity:
+                    duration = get_video_duration(path, args.ffmpeg)
+                    if duration <= 0:
+                        raise ValueError("无法读取源视频时长")
+                    timeline.duration = duration
+                if any(not 0 <= seg.s_cut < seg.e_cut <= timeline.duration for seg in timeline.segments):
+                    raise ValueError("时间轴切点超出源视频范围")
+                timeline.video_path = path
+                timeline.folder_name, timeline.display_name = resolve_match_folder_name(path, idx)
+            else:
+                timeline = analyze_video_file(path, idx, config, log_cb=print, use_cache=not args.rescan)
+            timelines.append(timeline)
+            if args.analyze_only:
+                dest = os.path.join(args.output, timeline.folder_name, "match_timeline.json")
+                save_timeline_json(timeline, dest)
+                print(f"时间轴: {os.path.abspath(dest)}")
+        except (OSError, RuntimeError, ValueError) as exc:
+            errors.append(str(exc))
+            print(f"处理失败 [{path}]: {exc}", file=sys.stderr)
+    if timelines and not args.analyze_only:
+        try:
+            results = export_batch_timelines(timelines, args.output, config, log_cb=print)
+        except (OSError, RuntimeError, ValueError) as exc:
+            print(f"导出失败: {exc}", file=sys.stderr)
+            return 1
+        artifacts = results["artifacts"] + [path for match in results["matches"] for path in match["artifacts"]]
+        print(f"成功生成 {len(artifacts)} 个文件，目录: {os.path.abspath(args.output)}")
+    print(f"总耗时 {time.monotonic() - started:.2f} 秒")
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
-    main()
+    # Keep one module instance when GUI engine imports the detection helpers.
+    sys.modules.setdefault("badminton_cutter", sys.modules[__name__])
+    raise SystemExit(main())

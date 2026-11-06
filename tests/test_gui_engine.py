@@ -131,6 +131,7 @@ class TestGuiEngine(unittest.TestCase):
         self.assertEqual(enc, "libx264")
 
     def test_export_video_timeline_multi_modes(self):
+        self.timeline.enabled_rallies[0].lead_quadrant = 0
         with tempfile.TemporaryDirectory() as tmpdir:
             def fake_cut(ffmpeg_bin, vpath, s, d, out):
                 os.makedirs(os.path.dirname(out), exist_ok=True)

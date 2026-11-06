@@ -29,8 +29,8 @@ class TestModesHandler(unittest.TestCase):
         self.assertEqual(cats["02_多拍高能拉锯"][0]["index"], 1)
         self.assertEqual(cats["02_多拍高能拉锯"][1]["index"], 4)
 
-        self.assertEqual(len(cats["03_网前平抽快攻"]), 1)
-        self.assertEqual(cats["03_网前平抽快攻"][0]["index"], 3)
+        self.assertFalse(cats["03_网前平抽快攻"])
+        self.assertEqual(cats["04_打法未判定"][0]["index"], 3)
 
     def test_filter_solo_rallies(self):
         rallies = [
