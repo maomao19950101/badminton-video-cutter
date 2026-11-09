@@ -15,3 +15,5 @@ __pycache__/
 *.wav
 *.ass
 *.log
+bin/
+*.timeline.json

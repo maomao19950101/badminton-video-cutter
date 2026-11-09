@@ -577,6 +577,28 @@ class TestRallyDecoupling(unittest.TestCase):
             )
         self.assertTrue(is_real, "Explosive live rally must be preserved even with boundary motion")
 
+    def test_walkin_opening_aisle_congestion_rejected(self):
+        """
+        Tests that check_clip_is_real_play rejects opening boundary corridor walk-in congestion
+        during non-play intermissions (e.g. b0 >= 15.0 or b1 >= 18.0 with our0 < 10.0, max_our < 28.0)
+        when players walk into court while adjacent courts smash (v1.8.10).
+        """
+        def mock_motion(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            if abs(t_sec - 941.41) < 0.1:
+                return (6.16, 8.00, 4.65, 2.9, 20.83)
+            elif abs(t_sec - (941.41 + 0.85)) < 0.1:
+                return (12.19, 15.48, 9.50, 3.1, 22.22)
+            else:
+                return (13.5, 15.0, 11.0, 1.8, 5.0)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion):
+            is_real = check_clip_is_real_play(
+                cap="dummy", fps=30.0, s_cut=941.41, e_cut=954.18,
+                min_dur=5.0, r_peaks=[(942.16, 1e7), (943.0, 1e7), (944.0, 1e7), (945.0, 1e7), (946.0, 1e7)],
+                vpath="/dummy/video.mp4"
+            )
+        self.assertFalse(is_real, "Opening boundary aisle congestion must be rejected")
+
 
 if __name__ == "__main__":
     unittest.main()

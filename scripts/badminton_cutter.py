@@ -41,7 +41,7 @@ from modes_handler import (
     PLAYER_QUADRANTS,
 )
 
-__version__ = "1.8.9"
+__version__ = "1.8.10"
 
 
 def resolve_ffmpeg_bin():
@@ -380,6 +380,19 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
         if max_our < 30.0:
             if motions[0][4] >= 12.0 or motions[1][4] >= 25.0 or b_avg >= 17.0:
                 return False
+
+    # Walk-in / Sideline aisle congestion at clip opening (入场走动/过道闲逛强过滤 - v1.8.10)
+    # If boundary motion at clip opening / serve setup is high (b0 >= 15.0 or b1 >= 18.0)
+    # while active court motion is non-explosive (our0 < 10.0), players are just entering from benches
+    # while adjacent courts smash, not a genuine serve rally!
+    m_open = sample_instant_motion(cap, fps, s_cut, vpath=vpath, **ffmpeg_opts)
+    m_serve = sample_instant_motion(cap, fps, s_cut + 0.85, vpath=vpath, **ffmpeg_opts)
+    if m_open is not None and m_serve is not None:
+        if (m_open[4] >= 15.0 or m_serve[4] >= 18.0) and m_open[0] < 10.0 and max_our < 28.0:
+            return False
+        if m_open[4] >= 14.0 and m_serve[4] >= 14.0 and m_open[0] < 12.0 and max_our < 28.0:
+            return False
+
     return True
 
 
@@ -614,7 +627,9 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
         has_video_source = (cap is not None) or (vpath is not None)
         if has_video_source and len(c) >= min_hits + 1:
             m_0 = sample_instant_motion(cap, fps, c[0][0] - 0.85, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
-            is_c0_still = (m_0 is not None and m_0[0] <= 7.5 and m_0[2] <= 7.0)
+            # Under BWF Rule 9.1, server and receiver must remain stationary in service boxes,
+            # and boundary corridors must be clear of pedestrian traffic (b_max <= 8.5).
+            is_c0_still = (m_0 is not None and m_0[0] <= 7.5 and m_0[2] <= 7.0 and m_0[4] <= 8.5)
 
             if not is_c0_still:
                 best_serve_k = 0
@@ -628,10 +643,10 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
                             continue
                     m_pre1 = sample_instant_motion(cap, fps, t_k - 0.85, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
                     m_pre2 = sample_instant_motion(cap, fps, t_k - 1.50, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
-                    was_still = any(m is not None and m[0] <= 7.5 and m[2] <= 7.0 for m in [m_pre1, m_pre2])
+                    was_still = any(m is not None and m[0] <= 7.5 and m[2] <= 7.0 and m[4] <= 8.5 for m in [m_pre1, m_pre2])
                     if was_still:
                         m_post = sample_instant_motion(cap, fps, t_k + 0.65, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
-                        if m_post and (m_post[0] >= 12.0 or m_post[2] >= 9.0):
+                        if m_post and (m_post[0] >= 12.0 or m_post[2] >= 9.0) and m_post[4] < 12.0:
                             best_serve_k = k
                             break
                 if best_serve_k > 0:
