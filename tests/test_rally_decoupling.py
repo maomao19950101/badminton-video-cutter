@@ -599,6 +599,63 @@ class TestRallyDecoupling(unittest.TestCase):
             )
         self.assertFalse(is_real, "Opening boundary aisle congestion must be rejected")
 
+    def test_deadball_walking_rejection_and_rally_preservation(self):
+        """
+        Tests that dead-ball walking floor taps before a serve are rejected,
+        and authentic multi-shot rallies followed by dead-ball walking intermissions
+        are strictly preserved without truncation (v1.8.11).
+        """
+        peaks = [
+            # 1. Dead-ball floor scoop taps during shuttle pickup (no pre-serve stillness)
+            (110.96, 1.73e7), (112.08, 1.84e7), (113.08, 8.64e6),
+            (113.52, 8.22e6), (114.25, 5.04e6), (114.70, 5.68e6),
+            # 2. Genuine Rally 1: 15 hits starting with serve at 117.41, smashes at 122.16 and 126.69
+            (117.41, 3.04e7), (118.01, 1.77e7), (119.04, 9.32e6), (119.55, 1.46e7),
+            (122.16, 6.77e7), (122.75, 5.27e6), (123.36, 5.62e6), (124.70, 5.72e6),
+            (125.10, 2.85e7), (125.54, 5.77e6), (126.69, 4.50e7), (127.65, 1.20e7),
+            (128.47, 5.29e6), (129.43, 3.65e7), (130.62, 7.71e6),
+            # 3. Intermission floor taps & dead-ball gap
+            (132.06, 5.06e6), (132.41, 5.17e6), (133.93, 2.16e7), (134.95, 7.99e6), (135.42, 9.49e6),
+            # 4. Genuine Rally 2: Serve at 136.16
+            (136.16, 9.02e6), (136.86, 5.80e6), (137.33, 7.70e6), (137.69, 8.20e6), (138.57, 1.42e7),
+            (139.07, 1.74e7), (143.44, 3.20e7)
+        ]
+
+        def mock_motion(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            if 109.0 <= t_sec < 116.0:
+                # Ball pickup walking
+                return (11.4, 10.6, 12.0, 0.7, 4.3)
+            elif 116.0 <= t_sec < 117.41:
+                # Pre-serve stationary setup (near court stationary, receiver swaying)
+                return (9.3, 13.7, 5.7, 1.1, 5.4)
+            elif 117.41 <= t_sec <= 130.62:
+                # Active rally
+                return (18.5, 21.0, 16.0, 1.2, 5.0)
+            elif 130.62 < t_sec <= 131.4:
+                # Deceleration and dead-ball drop right after rally ends
+                return (6.0, 6.5, 5.5, 0.8, 6.0)
+            elif 131.4 < t_sec < 135.0:
+                # Intermission walking
+                return (12.0, 14.0, 10.0, 0.8, 6.0)
+            elif 135.0 <= t_sec < 136.16:
+                # Pre-serve stationary setup for Rally 2
+                return (7.7, 9.6, 6.1, 0.4, 2.8)
+            else:
+                return (16.0, 18.0, 14.0, 0.9, 4.0)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion):
+            rallies = extract_multi_shot_rallies(peaks, v_dur=200.0, min_hits=5, vpath="/dummy/video.mp4")
+
+        # Must extract exactly 2 genuine rallies, rejecting the 6 dead-ball floor scoop hits
+        self.assertEqual(len(rallies), 2, "Dead-ball walking cluster must be rejected")
+        # Rally 1 must start at 117.41 - 0.75 and capture all 15 hits without severing
+        self.assertAlmostEqual(rallies[0]["s_cut"], 117.41 - 0.75, places=2)
+        self.assertAlmostEqual(rallies[0]["peaks"][0][0], 117.41, places=2)
+        self.assertAlmostEqual(rallies[0]["peaks"][-1][0], 130.62, places=2)
+        self.assertEqual(len(rallies[0]["peaks"]), 15)
+        # Rally 2 must start at 136.16 - 0.75
+        self.assertAlmostEqual(rallies[1]["s_cut"], 136.16 - 0.75, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

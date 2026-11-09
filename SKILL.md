@@ -2,7 +2,7 @@
 name: badminton-video-cutter
 description: 剪辑固定机位、有现场音轨的羽毛球比赛录像。用于提取多拍与接发秒杀候选、按局整理、复核回合时间轴、拼接多拍纯享、裁剪短视频或打开本地剪辑工作台。支持 MP4、MOV、MKV 和 TS。
 metadata:
-  version: "1.8.10"
+  version: "1.8.11"
 ---
 
 # 羽毛球比赛视频剪辑

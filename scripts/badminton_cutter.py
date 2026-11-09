@@ -41,7 +41,7 @@ from modes_handler import (
     PLAYER_QUADRANTS,
 )
 
-__version__ = "1.8.10"
+__version__ = "1.8.11"
 
 
 def resolve_ffmpeg_bin():
@@ -526,30 +526,38 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
                 #    (Protects rapid net touches, flat drives, drops, and pushes from being cleaved).
                 # 3. If there is NO attack AND intermediate gaps contain walking steps (any gap > 1.15s),
                 #    proves players are low-motion walking and tapping floor scoops, so we decouple cleanly at c[i].
-                had_prior_smash = any(c[k][1] >= 4.5e7 for k in range(max(0, i - 2), i))
-                if had_prior_smash and gap >= 0.70 and (i + 1 < len(c) - 1):
-                    dead_gap_idx = None
-                    for k in range(i, min(len(c) - 1, i + 8)):
-                        if c[k + 1][0] - c[k][0] >= 2.00:
-                            # A true inter-point break leads into a new serve (serve return gap between 0.55s and 2.50s)
-                            # Deep high clears in mid-rally have rapid counter-attacks (gap < 0.55s), not a new serve!
-                            is_serve = True
-                            if k + 2 < len(c):
-                                g_after = c[k + 2][0] - c[k + 1][0]
-                                if g_after < 0.55 or g_after > 2.50:
-                                    is_serve = False
-                            if is_serve:
-                                dead_gap_idx = k
-                                break
+                had_prior_smash = any(c[k][1] >= 3.5e7 for k in range(max(0, i - 4), i))
+                if had_prior_smash and gap >= 0.70 and (i + 1 < len(c)):
+                    # Dead-ball floor scoop taps following point-ending stroke (v1.8.11)
+                    if gap >= 1.25 and c[i + 1][1] < 8.0e6 and (i + 2 >= len(c) or c[i + 2][1] < 1.0e7):
+                        if cap is not None or vpath is not None:
+                            m_gap = sample_instant_motion(cap, fps, c[i][0] + 0.5 * gap, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
+                            if m_gap is not None and (m_gap[0] <= 7.5 or m_gap[4] >= 15.0):
+                                is_break = True
 
-                    if dead_gap_idx is not None and dead_gap_idx > i:
-                        inter_energies = [c[m][1] for m in range(i + 1, dead_gap_idx + 1)]
-                        has_attack = any(e >= 1.8e7 for e in inter_energies)
-                        inter_gaps = [c[m + 1][0] - c[m][0] for m in range(i, dead_gap_idx)]
-                        is_rapid_net_play = len(inter_gaps) >= 2 and all(g <= 1.15 for g in inter_gaps)
+                    if not is_break and i + 1 < len(c) - 1:
+                        dead_gap_idx = None
+                        for k in range(i, min(len(c) - 1, i + 8)):
+                            if c[k + 1][0] - c[k][0] >= 2.00:
+                                # A true inter-point break leads into a new serve (serve return gap between 0.55s and 2.50s)
+                                # Deep high clears in mid-rally have rapid counter-attacks (gap < 0.55s), not a new serve!
+                                is_serve = True
+                                if k + 2 < len(c):
+                                    g_after = c[k + 2][0] - c[k + 1][0]
+                                    if g_after < 0.55 or g_after > 2.50:
+                                        is_serve = False
+                                if is_serve:
+                                    dead_gap_idx = k
+                                    break
 
-                        if not has_attack and not is_rapid_net_play:
-                            is_break = True
+                        if dead_gap_idx is not None and dead_gap_idx > i:
+                            inter_energies = [c[m][1] for m in range(i + 1, dead_gap_idx + 1)]
+                            has_attack = any(e >= 1.8e7 for e in inter_energies)
+                            inter_gaps = [c[m + 1][0] - c[m][0] for m in range(i, dead_gap_idx)]
+                            is_rapid_net_play = len(inter_gaps) >= 2 and all(g <= 1.15 for g in inter_gaps)
+
+                            if not has_attack and not is_rapid_net_play:
+                                is_break = True
 
                 # Rule 2: Inter-point break / pre-serve gap
                 elif gap >= 2.10:
@@ -617,40 +625,59 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
         if max_energy < 1.8e7:
             continue
 
-        # Rule 4: Pre-Serve Stationary Boundary & True Serve Anchoring (发球静止定界与真发球锚定 - v1.8.5)
+        # Rule 4: Pre-Serve Stationary Boundary & True Serve Anchoring (发球静止定界与真发球锚定 - v1.8.11)
         # Under BWF Rule 9.1, server and receiver must remain stationary in service boxes before serve.
         # If a cluster begins with footsteps, ball-picking walking noise, or adjacent-court hits:
-        # 1. Inspect whether c[0] was preceded by stationary stillness (our_m <= 7.5 and near_m <= 7.0).
-        # 2. If c[0] was walking noise, scan forward to locate the authentic opening serve:
-        #    a stroke c[k] preceded by a stationary trough and immediately followed by active rally surge.
-        # Prunes all preceding dead-ball walking hits, eliminating leading ball-picking dead time completely.
+        # 1. Multi-window stillness verification: Checks t - 0.85s, t - 1.20s, and t - 1.50s.
+        #    In doubles, one partner or receiver may bounce slightly, so near_m <= 7.0 or far_m <= 7.0
+        #    with our_m <= 10.0 qualifies, or overall our_m <= 7.5 (and corridor b_max <= 8.5).
+        # 2. If c[0] was walking noise, scan forward (at most 4 hits) to locate authentic serve.
+        #    CRITICAL GUARD: Never discard hits if preceding strokes contained real attack/smash (E >= 2.5e7)!
+        # 3. If c[0] has NO pre-serve stillness AND no serve was found:
+        #    Clusters of short duration (< 4.5s) or low energy (< 2.5e7) with <= 7 hits are dead-ball
+        #    ball-retrieval / walking noise and are rejected completely.
         has_video_source = (cap is not None) or (vpath is not None)
-        if has_video_source and len(c) >= min_hits + 1:
-            m_0 = sample_instant_motion(cap, fps, c[0][0] - 0.85, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
-            # Under BWF Rule 9.1, server and receiver must remain stationary in service boxes,
-            # and boundary corridors must be clear of pedestrian traffic (b_max <= 8.5).
-            is_c0_still = (m_0 is not None and m_0[0] <= 7.5 and m_0[2] <= 7.0 and m_0[4] <= 8.5)
+        if has_video_source and len(c) >= min_hits:
+            def _check_serve_stillness(m):
+                if m is None:
+                    return False
+                our_m, far_m, near_m, top_d, b_max = m
+                return b_max <= 8.5 and (our_m <= 7.5 or (near_m <= 7.0 and our_m <= 10.0) or (far_m <= 7.0 and our_m <= 10.0))
+
+            g_lead = (c[1][0] - c[0][0]) if len(c) > 1 else 1.0
+            m_pre_list = [
+                sample_instant_motion(cap, fps, c[0][0] - dt, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
+                for dt in (0.85, 1.20, 1.50)
+            ]
+            is_c0_still = (g_lead >= 0.55) and any(_check_serve_stillness(m) for m in m_pre_list)
 
             if not is_c0_still:
                 best_serve_k = 0
-                max_search_k = min(len(c) - min_hits, 16)
+                max_search_k = min(len(c) - min_hits, 8)
                 for k in range(1, max_search_k + 1):
+                    # Never discard strokes if preceding hits contained real play / attacks
+                    if any(c[m][1] >= 2.5e7 for m in range(k)):
+                        break
                     t_k = c[k][0]
-                    # Realistic serve flight time to return stroke: at least 0.60s (net crossing) and at most 2.60s (high lob return)
+                    # Realistic serve flight time to return stroke: at least 0.60s and at most 2.60s
                     if k + 1 < len(c):
                         g_ret = c[k + 1][0] - t_k
                         if g_ret < 0.60 or g_ret > 2.60:
                             continue
                     m_pre1 = sample_instant_motion(cap, fps, t_k - 0.85, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
-                    m_pre2 = sample_instant_motion(cap, fps, t_k - 1.50, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
-                    was_still = any(m is not None and m[0] <= 7.5 and m[2] <= 7.0 and m[4] <= 8.5 for m in [m_pre1, m_pre2])
-                    if was_still:
+                    if _check_serve_stillness(m_pre1):
                         m_post = sample_instant_motion(cap, fps, t_k + 0.65, vpath=vpath, ffmpeg_bin=ffmpeg_bin)
                         if m_post and (m_post[0] >= 12.0 or m_post[2] >= 9.0) and m_post[4] < 12.0:
                             best_serve_k = k
                             break
+
                 if best_serve_k > 0:
                     c = c[best_serve_k:]
+                else:
+                    # If c[0] had NO stationary stillness AND no authentic serve was found:
+                    # Rejects dead-ball floor scooping / walking noise clusters
+                    if len(c) <= 7 and (max_energy < 2.5e7 or (c[-1][0] - c[0][0]) < 4.5):
+                        continue
 
         s_cut = max(0.0, c[0][0] - 0.75)
         last_hit = c[-1][0]
