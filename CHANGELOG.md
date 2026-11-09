@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.13] - 2026-11-09
+
+- 强化发球假高潮、局间走动与纯发球/流局（serve-only & dead-ball walking）多维质检防线：
+  - 引入羽毛球实战击球飞行周期物理约束（Acoustic Minimum Physics Cadence Verification）：5 拍回合跨度需 $\ge 4.0\text{s}$，6 拍 $\ge 4.8\text{s}$，7 拍 $\ge 5.6\text{s}$，8 拍 $\ge 6.4\text{s}$，杜绝局间邻场杀球串音在短时间内合成伪多拍；
+  - 引入近场实战脚部爆发力约束（`max_near >= 13.5`），准确识破低速漫步（`near ~ 10-12`）与只发球未成局、发球下网失误等非实战流局片段；
+  - 引入背景场地强运动伴随近场呆滞判定（`avg_far >= 18.0 or max_far >= 24.0` 且 `max_near < 13.5`），严厉拦截相邻与后方场地激烈对抗而本场选手慢走闲聊的误检；
+  - 增加测试用例 `test_serve_only_and_intermission_walking_rejected`，全套 61 项自动化测试 100% 通过。
+- 全面地毯式审查并清洗 1105 六大场次全部视频：
+  - 彻底清理确认的 58 个局间死球/闲逛/串音/过道走动误检片段；
+  - 各局剩余真实实战精彩多拍严格按时间轴自然顺延重新编号（`多拍01`, `多拍02`, ...）；
+  - 同步重命名各局文件夹为精确拍数（如 `第01局_实战对阵_34拍`），更新各场次 `match_timeline.json` 与 `game_summary.txt`。
+
 ## [1.8.12] - 2026-11-09
 
 - 强化局间捡球触地声（floor-scoop cadence）与短簇多拍质检：

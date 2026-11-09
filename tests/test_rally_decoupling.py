@@ -696,6 +696,48 @@ class TestRallyDecoupling(unittest.TestCase):
             )
         self.assertTrue(is_real, "Authentic 5-shot flat-drive rally must be preserved")
 
+    def test_serve_only_and_intermission_walking_rejected(self):
+        """
+        Tests that check_clip_is_real_play rejects serve-only preparation, aborted serves,
+        and walking between points where adjacent court smashes create false acoustic clusters (v1.8.13).
+        Simulates Match 1 Clip 44: 7 hits in 4.45s (impossible shuttle flight span < 5.6s)
+        while players are casually walking without explosive split-step/jump footwork (near < 13.5).
+        """
+        fake_peaks_clip44 = [
+            (1385.47, 1.17e7),
+            (1386.02, 6.21e6),
+            (1387.16, 1.19e7),
+            (1387.865, 7.32e6),
+            (1388.315, 3.81e7),  # Adjacent court smash
+            (1389.18, 8.91e6),
+            (1389.925, 1.59e7),
+        ]
+
+        # Near player walking (near=10.5, max_near=12.5), background court active (far=21.8)
+        def mock_motion_clip44(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            return (15.57, 21.77, 10.50, 2.0, 5.8)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion_clip44):
+            is_real = check_clip_is_real_play(
+                cap="dummy", fps=30.0, s_cut=1384.72, e_cut=1392.87,
+                min_dur=5.0, r_peaks=fake_peaks_clip44, vpath="/dummy/video.mp4"
+            )
+        self.assertFalse(is_real, "Serve-only walking cluster (Clip 44) must be strictly rejected")
+
+        # Insufficient physical flight cadence (6 hits in 3.8s < 4.8s required)
+        fake_peaks_short_span = [
+            (100.0, 1e7), (100.7, 1e7), (101.5, 1e7), (102.2, 1e7), (103.0, 1e7), (103.8, 1e7)
+        ]
+        def mock_motion_walk(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            return (13.0, 13.0, 13.0, 1.0, 4.0)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion_walk):
+            is_real = check_clip_is_real_play(
+                cap="dummy", fps=30.0, s_cut=99.0, e_cut=105.0,
+                min_dur=5.0, r_peaks=fake_peaks_short_span, vpath="/dummy/video.mp4"
+            )
+        self.assertFalse(is_real, "Clusters violating physical shuttle flight time must be rejected")
+
 
 if __name__ == "__main__":
     unittest.main()
