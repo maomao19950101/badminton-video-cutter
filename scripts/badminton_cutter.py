@@ -41,7 +41,7 @@ from modes_handler import (
     PLAYER_QUADRANTS,
 )
 
-__version__ = "1.8.11"
+__version__ = "1.8.12"
 
 
 def resolve_ffmpeg_bin():
@@ -354,6 +354,22 @@ def check_clip_is_real_play(cap, fps, s_cut, e_cut, min_dur=5.0, r_peaks=None, s
     # Rejects dead-ball walking intervals where adjacent court smashes produce false acoustic clusters.
     if max_our < 13.5 and max_near < 12.0:
         return False
+
+    # Dead-ball floor tapping / ball-scooping cadence check (v1.8.12):
+    # In genuine badminton rallies, at least 4.2s is required for 5 shots from serve to 5th hit,
+    # unless trapezoid exhibits explosive multi-court rally motion (max_our >= 16.0).
+    # Short bursts of low-energy taps (< 1.0e7) with rapid cadence (< 0.45s) indicate racket ground scooping.
+    if r_peaks and len(r_peaks) <= 6:
+        span = r_peaks[-1][0] - r_peaks[0][0]
+        if span < 4.2 and max_our < 16.0:
+            return False
+        tight_floor_taps = sum(
+            1 for m in range(len(r_peaks) - 1)
+            if (r_peaks[m + 1][0] - r_peaks[m][0] < 0.45)
+            and r_peaks[m][1] < 1.0e7 and r_peaks[m + 1][1] < 1.0e7
+        )
+        if tight_floor_taps >= 2:
+            return False
     # Far court dormant (players standing around waiting, drinking water, changing balls)
     if avg_far < 5.5 and max_far < 8.5:
         return False

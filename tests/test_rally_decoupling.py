@@ -656,6 +656,46 @@ class TestRallyDecoupling(unittest.TestCase):
         # Rally 2 must start at 136.16 - 0.75
         self.assertAlmostEqual(rallies[1]["s_cut"], 136.16 - 0.75, places=2)
 
+    def test_ball_retrieval_floor_scooping_rejected(self):
+        """
+        Tests that check_clip_is_real_play rejects ball-retrieval floor scooping noise
+        during intermissions (5 hits within < 4.2s, tight floor taps, max_our < 12.5)
+        even when a near-court player jogs to pick up the shuttlecock (v1.8.12).
+        """
+        # Simulated Match 2 Clip 59: player jogs to retrieve shuttle, taps floor 3 times
+        fake_peaks = [
+            (1610.825, 5.66e6),
+            (1612.770, 2.76e7),  # Adjacent court smash
+            (1614.005, 8.65e6),
+            (1614.395, 5.62e6),  # Tight floor tap (0.39s gap)
+            (1614.765, 6.13e6),  # Tight floor tap (0.37s gap)
+        ]
+
+        def mock_motion_pickup(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            # Single near player jogging to retrieve shuttle (near=12.8, but overall court max_our=11.61)
+            return (11.61, 9.93, 12.80, 0.65, 3.0)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion_pickup):
+            is_real = check_clip_is_real_play(
+                cap="dummy", fps=30.0, s_cut=1610.08, e_cut=1617.71,
+                min_dur=5.0, r_peaks=fake_peaks, vpath="/dummy/video.mp4"
+            )
+        self.assertFalse(is_real, "Ball retrieval floor scooping cluster must be rejected")
+
+        # Genuine 5-shot flat-drive rally: explosive bilateral play (max_our = 23.5)
+        real_peaks = [
+            (50.0, 1.2e7), (50.8, 2.8e7), (51.5, 2.5e7), (52.2, 3.5e7), (53.0, 1.8e7)
+        ]
+        def mock_motion_real(cap, fps, t_sec, vpath=None, ffmpeg_bin=None):
+            return (23.5, 24.0, 23.0, 0.8, 3.5)
+
+        with patch("badminton_cutter.sample_instant_motion", side_effect=mock_motion_real):
+            is_real = check_clip_is_real_play(
+                cap="dummy", fps=30.0, s_cut=49.25, e_cut=54.50,
+                min_dur=5.0, r_peaks=real_peaks, vpath="/dummy/video.mp4"
+            )
+        self.assertTrue(is_real, "Authentic 5-shot flat-drive rally must be preserved")
+
 
 if __name__ == "__main__":
     unittest.main()
