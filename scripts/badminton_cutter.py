@@ -2,14 +2,9 @@
 """
 Badminton Match Auto-Cutter & Highlight Extractor CLI
 
-Comprehensive, broadcast-standard pipeline for badminton match footage:
-- Acoustic transient hit detection with high-frequency energy profiling
-- Multi-court acoustic decoupling (filtering adjacent court bleed & sneaker squeaks)
-- Visual dead-ball motion drop truncation (zero walking, zero dead-ball pauses)
-- Physical flight time & cadence multimodal shot verification (1:1 real strokes)
-- Broadcast-grade ASS HUD overlay (millisecond match timer + tactical shot badges + finish banner)
-- 0.4x slow-motion instant replays and WeChat sticker GIF exports
-- Lossless stream copy cutting (-c copy) for rapid turnaround
+Audio and court-motion heuristics produce candidate rallies, estimated boundaries,
+and optional exports. These heuristics do not guarantee complete points, accurate
+hit counts, or removal of every dead-ball interval. Review before final delivery.
 """
 
 import os
@@ -41,7 +36,7 @@ from modes_handler import (
     PLAYER_QUADRANTS,
 )
 
-__version__ = "1.8.13"
+__version__ = "1.9.0"
 
 
 def resolve_ffmpeg_bin():
@@ -498,7 +493,7 @@ def verify_multimodal_shots(raw_peaks, min_shot_interval=0.50):
     return verified
 
 
-def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits=5, cap=None, fps=0.0, vpath=None, ffmpeg_bin=DEFAULT_FFMPEG):
+def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits=5, cap=None, fps=0.0, vpath=None, ffmpeg_bin=DEFAULT_FFMPEG, progress_cb=None):
     """
     Rally Ground-Truth Slicer & Zero Dead-Ball Decoupler (v1.4.7):
     1. Initial Clustering with max_gap=2.85s:
@@ -540,7 +535,9 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
 
     # 2. Decouple inter-point walking intermissions, deadball drops, and serves
     decoupled = []
-    for c in clusters:
+    for cluster_i, c in enumerate(clusters, 1):
+        if progress_cb:
+            progress_cb(0.45 * cluster_i / max(1, len(clusters)), f"分离候选区间 {cluster_i}/{len(clusters)}")
         sub = []
         i = 0
         while i < len(c):
@@ -636,7 +633,9 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
 
     # 3. Rally validation & pruning
     rallies = []
-    for c in decoupled:
+    for cluster_i, c in enumerate(decoupled, 1):
+        if progress_cb:
+            progress_cb(0.45 + 0.55 * cluster_i / max(1, len(decoupled)), f"定位候选首尾 {cluster_i}/{len(decoupled)}")
         # Prune trailing floor pickup taps if preceded by gap >= 2.00s and low energy
         while len(c) >= min_hits and (c[-1][0] - c[-2][0]) >= 2.00 and c[-1][1] < 8.0e6:
             c = c[:-1]
@@ -754,12 +753,49 @@ def extract_multi_shot_rallies(peaks, v_dur, max_gap=2.85, min_dur=5.0, min_hits
     return rallies
 
 
-def extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur):
+def serve_kill_acoustic_candidates(peaks, diagnostics=None):
+    """Existing conservative gates with observable counts; events are not rally counts."""
+    # The acoustic detector emits ordered peaks. Look up only neighboring events.
+    stats = {"input_events": len(peaks), "energy_pass": 0, "serve_interval_pass": 0,
+             "post_silence_pass": 0, "pre_silence_pass": 0}
+    times = [p[0] for p in peaks]
+    cand_items = []
+    for t_k, energy in peaks:
+        if energy < 7.5e6:
+            continue
+        stats["energy_pass"] += 1
+        serve_idx = bisect_right(times, -0.45, key=lambda t: t - t_k) - 1
+        if serve_idx < 0 or t_k - times[serve_idx] > 1.70:
+            continue
+        stats["serve_interval_pass"] += 1
+        t_serve = times[serve_idx]
+        subsequent = bisect_left(times, 0.25, key=lambda t: t - t_k)
+        if subsequent < len(times) and times[subsequent] - t_k <= 3.20:
+            continue
+        stats["post_silence_pass"] += 1
+        pre_noise = bisect_left(times, -2.80, key=lambda t: t - t_serve)
+        if pre_noise < len(times) and t_serve - times[pre_noise] >= 0.50:
+            continue
+        stats["pre_silence_pass"] += 1
+        cand_items.append((t_serve, t_k))
+
+    if diagnostics is not None:
+        diagnostics.update(stats)
+        diagnostics["rejected"] = {
+            "energy": stats["input_events"] - stats["energy_pass"],
+            "serve_interval": stats["energy_pass"] - stats["serve_interval_pass"],
+            "post_silence": stats["serve_interval_pass"] - stats["post_silence_pass"],
+            "pre_silence": stats["post_silence_pass"] - stats["pre_silence_pass"],
+        }
+    return cand_items
+
+
+def extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur, diagnostics=None):
     """
-    Multimodal Visual Serve-Kill Verification Protocol (v1.3.6 Ground-Landing Guaranteed):
+    Conservative multimodal serve-kill candidate verification:
     1. Mandatory Acoustic Isolation:
        - Server hits bird (t_serve) within 0.45s ~ 1.70s before receiver's kill impact (t_k).
-       - Zero acoustic strikes within [t_k + 0.25, t_k + 3.20] (proves rally did NOT continue).
+       - Zero acoustic strikes within [t_k + 0.25, t_k + 3.20] (heuristic; neighboring courts may invalidate this condition).
        - Pre-serve ready stance silence: zero strikes between [t_serve - 2.80, t_serve - 0.50].
        - Kill impact energy >= 7.5e6.
     2. Parallelized 4-Stage Visual Verification across 8 workers:
@@ -767,31 +803,20 @@ def extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unst
        - Stage 2 (Pre-Serve Ready Stance): min(pre1, pre2) <= 7.8, near_m <= 9.5, b_max <= 7.0
        - Stage 3 (Explosive Surge): surge = kill / (min_pre + 1e-4) >= 2.0
        - Stage 4 (Dead-Ball Decay & Full Landing Trajectory): post (at t_k + 1.2s) <= 12.5
-    3. Complete Landing Guarantee:
+    3. Estimated landing margin (requires visual review):
        - s_cut = max(0.0, t_serve - 0.65)
        - e_cut = min(v_dur, t_k + 1.25)  (Allows shuttlecock to plunge down, hit floor/net, and bounce)
     """
+    if diagnostics is None:
+        diagnostics = {}
+    diagnostics.update({"visual_attempted": 0, "visual_pass": 0, "visual_rejected": 0,
+                        "deduplicated": 0, "selected": 0})
     if cap is None or fps <= 0 or not peaks:
+        diagnostics["skipped_reason"] = "missing_video_or_audio_events"
         return []
 
-    # The acoustic detector emits ordered peaks. Look up only neighboring events.
-    times = [p[0] for p in peaks]
-    cand_items = []
-    for t_k, energy in peaks:
-        if energy < 7.5e6:
-            continue
-        serve_idx = bisect_right(times, -0.45, key=lambda t: t - t_k) - 1
-        if serve_idx < 0 or t_k - times[serve_idx] > 1.70:
-            continue
-        t_serve = times[serve_idx]
-        subsequent = bisect_left(times, 0.25, key=lambda t: t - t_k)
-        if subsequent < len(times) and times[subsequent] - t_k <= 3.20:
-            continue
-        pre_noise = bisect_left(times, -2.80, key=lambda t: t - t_serve)
-        if pre_noise < len(times) and t_serve - times[pre_noise] >= 0.50:
-            continue
-        cand_items.append((t_serve, t_k))
-
+    cand_items = serve_kill_acoustic_candidates(peaks, diagnostics)
+    diagnostics["visual_attempted"] = len(cand_items)
     if not cand_items:
         return []
 
@@ -844,6 +869,10 @@ def extract_true_serve_kills(cap, fps, vpath, peaks, rallies, stable_start, unst
     for k in merged_kills:
         if not final_kills or k["kill_t"] - final_kills[-1]["kill_t"] > 3.5:
             final_kills.append(k)
+    diagnostics["visual_pass"] = len(merged_kills)
+    diagnostics["visual_rejected"] = len(cand_items) - len(merged_kills)
+    diagnostics["deduplicated"] = len(merged_kills) - len(final_kills)
+    diagnostics["selected"] = len(final_kills)
     return final_kills
 
 
@@ -1024,7 +1053,11 @@ def main():
     operation.add_argument("--analyze-only", action="store_true", help="仅输出回合时间轴 JSON")
     operation.add_argument("--timeline", help="按现有或人工编辑的时间轴导出，仅接受单个源视频")
     parser.add_argument("--rescan", action="store_true", help="跳过时间轴缓存，重新分析")
+    parser.add_argument("--wait-for-input", type=float, default=0,
+                        help="先处理完整素材，再等待未就绪文件的秒数；默认不等待")
     args = parser.parse_args()
+    if not math.isfinite(args.wait_for_input) or args.wait_for_input < 0:
+        parser.error("--wait-for-input 必须是有限非负数")
     if args.jobs is not None and not 1 <= args.jobs <= 32:
         parser.error("--jobs 必须介于 1 和 32")
     if (args.min_hits < 1 or not math.isfinite(args.min_duration)
@@ -1058,11 +1091,41 @@ def main():
         lineup_threshold=args.lineup_threshold, rest_gap=args.rest_gap, long_intermission=args.long_intermission,
         min_rallies_per_game=args.min_rallies_per_game, exact=args.exact, jobs=args.jobs,
     )
+    from input_check import check_input_ready
+    from quality_review import write_review_reports
+
+    last_progress = [0.0]
+    def progress(pct, status):
+        now = time.monotonic()
+        if now - last_progress[0] >= 3.0 or pct >= 100:
+            print(f"进度 {pct:.0f}%：{status}", flush=True)
+            last_progress[0] = now
+
     started = time.monotonic()
     timelines = []
     errors = []
-    for idx, path in enumerate(videos, 1):
+    pending = []
+    queue = list(enumerate(videos, 1))
+    retry_deadline = None
+    while queue or pending:
+        if not queue:
+            if retry_deadline is None:
+                retry_deadline = time.monotonic() + args.wait_for_input
+            if time.monotonic() >= retry_deadline:
+                for _, path, reason in pending:
+                    errors.append(reason)
+                    print(f"未处理 [{path}]: {reason}；复制完成后重试，可复用已完成缓存。", file=sys.stderr)
+                break
+            time.sleep(min(2.0, max(0.0, retry_deadline - time.monotonic())))
+            queue = [(idx, path) for idx, path, _ in pending]
+            pending = []
+        idx, path = queue.pop(0)
         try:
+            ready, reason = check_input_ready(path, args.ffmpeg, require_audio=not bool(args.timeline))
+            if not ready:
+                pending.append((idx, path, reason))
+                print(f"暂未就绪 [{os.path.basename(path)}]: {reason}", flush=True)
+                continue
             if args.timeline:
                 timeline = load_timeline_json(args.timeline)
                 if timeline is None:
@@ -1074,23 +1137,24 @@ def main():
                     if duration <= 0:
                         raise ValueError("无法读取源视频时长")
                     timeline.duration = duration
-                if any(not 0 <= seg.s_cut < seg.e_cut <= timeline.duration for seg in timeline.segments):
+                if any(not 0 <= seg.s_cut < seg.e_cut <= timeline.duration for seg in timeline.segments if seg.enabled):
                     raise ValueError("时间轴切点超出源视频范围")
                 timeline.video_path = path
                 timeline.folder_name, timeline.display_name = resolve_match_folder_name(path, idx)
             else:
-                timeline = analyze_video_file(path, idx, config, log_cb=print, use_cache=not args.rescan)
+                timeline = analyze_video_file(path, idx, config, log_cb=print, progress_cb=progress, use_cache=not args.rescan)
             timelines.append(timeline)
             if args.analyze_only:
                 dest = os.path.join(args.output, timeline.folder_name, "match_timeline.json")
                 save_timeline_json(timeline, dest)
+                write_review_reports(timeline.to_dict(), os.path.dirname(dest))
                 print(f"时间轴: {os.path.abspath(dest)}")
         except (OSError, RuntimeError, ValueError) as exc:
             errors.append(str(exc))
             print(f"处理失败 [{path}]: {exc}", file=sys.stderr)
     if timelines and not args.analyze_only:
         try:
-            results = export_batch_timelines(timelines, args.output, config, log_cb=print)
+            results = export_batch_timelines(timelines, args.output, config, log_cb=print, progress_cb=progress)
         except (OSError, RuntimeError, ValueError) as exc:
             print(f"导出失败: {exc}", file=sys.stderr)
             return 1

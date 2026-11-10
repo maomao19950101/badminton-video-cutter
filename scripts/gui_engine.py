@@ -48,6 +48,7 @@ from badminton_cutter import (
     get_video_duration,
     verify_multimodal_shots,
 )
+from quality_review import audit_timeline, write_review_reports
 from match_segmenter import (
     extract_court_player_embeddings,
     extract_serve_keyframe,
@@ -153,8 +154,8 @@ class RallySegment:
     @property
     def label(self) -> str:
         if self.kind == "serve_kill":
-            return "【接发突击一拍定死】" if self.surge >= 2.4 else "【发球被一拍定死】"
-        return "【超长高能拉锯】" if self.dur >= 15.0 else "【多拍激烈对攻】"
+            return "【接发短分候选】"
+        return "【多拍候选】"
 
     def to_rally_dict(self) -> dict:
         return {
@@ -210,6 +211,7 @@ class VideoTimeline:
     analysis_key: str = ""
     source_identity: List[object] = field(default_factory=list)
     serve_kills_scanned: Optional[bool] = None
+    analysis_diagnostics: dict = field(default_factory=dict)
 
     def get_segment(self, uid: int) -> Optional[RallySegment]:
         for seg in self.segments:
@@ -315,6 +317,7 @@ class VideoTimeline:
             "analysis_key": self.analysis_key,
             "source_identity": self.source_identity,
             "serve_kills_scanned": self.serve_kills_scanned,
+            "analysis_diagnostics": self.analysis_diagnostics,
             "boundary_method": "estimated_from_audio_and_court_motion",
             "video_path": self.video_path,
             "display_name": self.display_name,
@@ -338,6 +341,7 @@ class VideoTimeline:
             analysis_key=str(d.get("analysis_key", "")),
             source_identity=d.get("source_identity", []),
             serve_kills_scanned=d.get("serve_kills_scanned"),
+            analysis_diagnostics=d.get("analysis_diagnostics", {}),
         )
 
 
@@ -611,7 +615,8 @@ def analyze_video_file(
         _prog(32.0, "正在提取候选多拍回合与死球截断...")
         rallies = extract_multi_shot_rallies(
             peaks, v_dur, min_dur=config.min_duration, min_hits=config.min_hits,
-            cap=cap, fps=fps, vpath=vpath, ffmpeg_bin=config.ffmpeg_bin
+            cap=cap, fps=fps, vpath=vpath, ffmpeg_bin=config.ffmpeg_bin,
+            progress_cb=lambda fraction, message: _prog(22.0 + 10.0 * fraction, message),
         )
         _log(f"  🏸 初步聚合出候选多拍区间: {len(rallies)} 处")
 
@@ -684,6 +689,10 @@ def analyze_video_file(
                 }
             )
 
+        timeline.analysis_diagnostics["rallies"] = {
+            "acoustic_events_in_stable_window": len(peaks),
+            "initial_candidates": len(rallies), "selected": len(valid_rallies),
+        }
         # Assign game indices via Player ReID if enabled
         rally_game_map = {i: 1 for i in range(len(valid_rallies))}
         earliest_break = min(config.rest_gap, config.long_intermission)
@@ -754,9 +763,13 @@ def analyze_video_file(
         timeline.serve_kills_scanned = False
         if wants_serve_kills(config):
             _prog(85.0, "正在扫描发球/接发球一拍定死名场面...")
+            short_diagnostics = {}
             kills = extract_true_serve_kills(
-                cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur
+                cap, fps, vpath, peaks, rallies, stable_start, unstable_end, v_dur,
+                diagnostics=short_diagnostics,
             )
+            timeline.analysis_diagnostics["serve_kill"] = short_diagnostics
+            _log(f"  接发短分筛选诊断: {json.dumps(short_diagnostics, ensure_ascii=False)}")
             for k in kills:
                 timeline.segments.append(
                     RallySegment(
@@ -839,9 +852,14 @@ def export_video_timeline(
         raise RuntimeError(f"源文件已更新，请重新扫描后再导出: {vpath}")
     if os.path.basename(timeline.folder_name) != timeline.folder_name or timeline.folder_name in ("", ".", ".."):
         raise ValueError("无效的场次目录名")
+    review = audit_timeline(timeline.to_dict())
+    if review["summary"]["errors"]:
+        reasons = "; ".join(i["message"] for i in review["issues"] if i["severity"] == "error")
+        raise ValueError(f"时间轴不能导出: {reasons}")
     match_dir = os.path.join(os.path.abspath(output_root), timeline.folder_name)
     os.makedirs(match_dir, exist_ok=True)
     timeline_path = save_timeline_json(timeline, os.path.join(match_dir, "match_timeline.json"))
+    review_paths = write_review_reports(timeline.to_dict(), match_dir)
     enabled_rallies = timeline.enabled_rallies if set(config.modes) != {"serve_kill"} else []
     enabled_kills = timeline.enabled_serve_kills
     cut = cut_exact if config.exact else cut_lossless
@@ -849,7 +867,7 @@ def export_video_timeline(
 
     export_summary = {
         "match_dir": match_dir, "rally_clips": [], "kill_clips": [],
-        "grand_rallies": [], "artifacts": [timeline_path], "warnings": [],
+        "grand_rallies": [], "artifacts": [timeline_path, *review_paths], "warnings": [],
     }
 
     def _record(path):
@@ -872,6 +890,8 @@ def export_video_timeline(
 
     if wants_serve_kills(config) and timeline.serve_kills_scanned is False:
         _warn("当前时间轴未扫描接发秒杀，若需要该类型请以默认模式重新扫描。")
+    if review["summary"]["long_segments"] or review["summary"]["overlap_pairs"]:
+        _warn(f"待复核：{review['summary']['long_segments']} 个长片段，{review['summary']['overlap_pairs']} 对重叠；见 review_report.md。")
     solo_ids = set()
     if "solo" in config.modes:
         candidates = [{**seg.to_rally_dict(), "uid": seg.uid} for seg in enabled_rallies]
@@ -893,11 +913,11 @@ def export_video_timeline(
 
         summary_lines = [
             "=" * 60,
-            "🏸 羽毛球实战视频全自动分局与球员重识别报告 (Match Summary)",
+            "🏸 羽毛球候选回合与估算分局报告 (Match Summary)",
             "=" * 60,
             f"视频源文件: {os.path.basename(vpath)}",
             f"输出总多拍: {len(enabled_rallies)} 处",
-            f"划分球局数: {len(sorted_game_indices)} 局",
+            f"估算分局数: {len(sorted_game_indices)} 局（需复核）",
             "-" * 60,
         ]
 
@@ -907,13 +927,13 @@ def export_video_timeline(
             g_start = g_segs[0].s_cut
             g_end = g_segs[-1].e_cut
             g_dur = max(0.0, g_end - g_start)
-            g_dir_name = f"第{new_g_idx:02d}局_实战对阵_{len(g_segs)}拍"
+            g_dir_name = f"第{new_g_idx:02d}局_估算_{len(g_segs)}回合"
             g_dir_path = os.path.join(match_dir, g_dir_name)
             os.makedirs(g_dir_path, exist_ok=True)
             all_game_dirs.append((g_dir_path, new_g_idx, len(g_segs)))
 
             summary_lines.append(
-                f"第{new_g_idx:02d}局 (共 {len(g_segs):02d} 拍):\n"
+                f"第{new_g_idx:02d}局（估算，共 {len(g_segs):02d} 个候选回合）:\n"
                 f"  时间跨度: {format_time_zh(g_start)} 至 {format_time_zh(g_end)} (比赛时长: {int(g_dur // 60)}分{int(round(g_dur % 60))}秒)\n"
                 f"  多拍序号: 多拍01 ~ 多拍{len(g_segs):02d}\n"
                 f"  保存目录: {g_dir_name}/\n"
@@ -994,7 +1014,7 @@ def export_video_timeline(
                     reel_name = f"00_【第{g_idx:02d}局_纯多拍合集】_全{len(g_clips)}段精选版.mp4"
                     _concat(g_clips, os.path.join(g_dir_path, reel_name))
         else:
-            reel_name = f"00_【{timeline.display_name}_纯多拍零死球合集】_全{len(clip_paths)}段精选版.mp4"
+            reel_name = f"00_【{timeline.display_name}_多拍候选合集】_全{len(clip_paths)}段精选版.mp4"
             _concat(clip_paths, os.path.join(match_dir, reel_name))
 
     # 3. Optional Broadcast HUD
@@ -1221,7 +1241,7 @@ def export_batch_timelines(
 
     if config.reel and all_grand_rallies and not (cancel_check and cancel_check()):
         grand_reel_path = os.path.join(
-            output_root, "00_【全场巅峰超长多拍TOP大集锦】_纯净原画零死球无字幕版.mp4"
+            output_root, "00_【全场巅峰超长多拍TOP大集锦】_原画候选无字幕版.mp4"
         )
         concat_clips(config.ffmpeg_bin, all_grand_rallies, grand_reel_path)
         batch_artifacts.append(grand_reel_path)

@@ -23,8 +23,8 @@ macOS 可双击 `启动可视化剪辑软件_Mac.command`。Windows 可运行同
 ## 使用方式
 
 ```bash
-# 默认输出独立多拍与接发秒杀候选片段
-python scripts/badminton_cutter.py -i "比赛目录" -o "剪辑输出"
+# 建议先分析并查看复核报告，再按时间轴导出
+python scripts/badminton_cutter.py -i "比赛目录" -o "剪辑输出" --analyze-only --wait-for-input 300
 
 # 先生成时间轴，批量确认前不写视频
 python scripts/badminton_cutter.py -i "比赛.mp4" -o "剪辑输出" --analyze-only
@@ -53,3 +53,21 @@ python scripts/badminton_cutter.py -i "比赛.mp4" -o "精剪输出" \
 测试可用 `python -m unittest discover -s tests` 运行。需要 FFmpeg 的集成用例会在 FFmpeg 缺失时跳过。
 
 历史变更见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 1.9.0 质量复核与输入检查
+
+分析和导出会在场次目录生成 `review_report.md` / `review_report.json`，提示大于 30 秒的长片段、所有重叠对、非法切点与编号等问题。报告是复核清单，不是准确率认证，也不会自动修改切点。导出入口拒绝非法切点、无效时长和重复片段编号。分局与拍数均为估算；报告中的“回合数”不再误写成“拍数”。
+
+旧时间轴可直接复核，无需视频依赖：
+
+```bash
+python scripts/quality_review.py -i "剪辑输出" -o "复核报告"
+```
+
+CLI 每个输入先检查文件稳定性、视频元数据与音轨。未就绪文件暂缓，完整素材先分析，再按 `--wait-for-input` 等待重试；默认值 0 表示不额外等待。等待预算从处理完首轮完整素材后开始，元数据探测与正在执行的分析不计入精确超时保证。单次元数据探测最多 15 秒。超时的素材明确列为未处理，进程返回非零；成功生成的时间轴可复用缓存。
+
+CLI 现在输出候选拆分、首尾定位、视觉核验和导出的进度。`analysis_diagnostics.serve_kill` 保存声学各门槛与视觉筛选计数，帮助解释“为什么检出 0 个”；历史时间轴没有这些计数时保留缺失状态。
+
+详细复核与真实素材验收方法见 [质量复核](references/quality-review.md)。本版没有新增球场校准、连续动作分类或代理解码，也没有未经验证地放宽检测阈值。
+
+1.9.0 调整了候选标签与分局目录命名。再次导出建议选新目录，避免旧版本留下的片段与新结果混在一起；工具不会清理既有导出文件。

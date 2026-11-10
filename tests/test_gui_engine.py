@@ -77,7 +77,7 @@ class TestGuiEngine(unittest.TestCase):
         self.assertAlmostEqual(seg.s_cut, 8.0)
         self.assertAlmostEqual(seg.e_cut, 25.5)
         self.assertAlmostEqual(seg.dur, 17.5)
-        self.assertEqual(seg.label, "【超长高能拉锯】")
+        self.assertEqual(seg.label, "【多拍候选】")
 
         # Clamp start at 0.0 and end at duration
         seg = self.timeline.adjust_segment_time(1, delta_start=-50.0, delta_end=900.0)
@@ -88,7 +88,7 @@ class TestGuiEngine(unittest.TestCase):
         seg = self.timeline.set_segment_time(1, 12.0, 19.0)
         self.assertAlmostEqual(seg.s_cut, 12.0)
         self.assertAlmostEqual(seg.e_cut, 19.0)
-        self.assertEqual(seg.label, "【多拍激烈对攻】")
+        self.assertEqual(seg.label, "【多拍候选】")
 
     def test_toggle_segment_enabled(self):
         self.assertEqual(len(self.timeline.enabled_rallies), 3)
